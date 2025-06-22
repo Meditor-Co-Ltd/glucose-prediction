@@ -15,7 +15,7 @@ def download_model():
     model_path = "model.pkl"
     if not os.path.exists(model_path):
         print("Downloading model...")
-        url = "https://firebasestorage.googleapis.com/v0/b/innomax-40d4d.appspot.com/o/random_forest_model_0740_rmse_17.pkl?alt=media&token=35720e11-2a75-4e6e-82f2-50c635043837"
+        url = "https://firebasestorage.googleapis.com/v0/b/innomax-40d4d.appspot.com/o/random_forest_model_0773_rmse_18.pkl?alt=media&token=aff5ea98-27a7-4e28-b830-d5f7c731dac5"
         response = requests.get(url)
         with open(model_path, 'wb') as f:
             f.write(response.content)
