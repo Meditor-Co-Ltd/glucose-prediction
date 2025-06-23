@@ -4,94 +4,150 @@ import numpy as np
 import joblib
 from flask import Flask, request, jsonify
 import warnings
-import requests
-import hashlib
+import tempfile
+import firebase_admin
+from firebase_admin import credentials, storage
 
 warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
 
-# Функция для скачивания модели с проверкой целостности
-def download_model():
-    model_path = "model.pkl"
-    
-    # Удаляем существующий файл если он поврежден
-    if os.path.exists(model_path):
-        try:
-            # Пробуем загрузить существующий файл
-            test_load = joblib.load(model_path)
-            print("Existing model file is valid")
-            return model_path
-        except Exception as e:
-            print(f"Existing model file is corrupted: {e}")
-            os.remove(model_path)
-    
-    print("Downloading model...")
-    url = "https://firebasestorage.googleapis.com/v0/b/innomax-40d4d.appspot.com/o/random_forest_model_0773_rmse_18.pkl?alt=media&token=aff5ea98-27a7-4e28-b830-d5f7c731dac5"
-    
+def initialize_firebase():
+    """Инициализация Firebase Admin SDK"""
     try:
-        # Скачиваем с проверкой статуса
-        response = requests.get(url, timeout=60)
-        response.raise_for_status()
+        # Проверяем, не инициализирован ли уже Firebase
+        if not firebase_admin._apps:
+            # Способ 1: Использование переменной окружения с путем к файлу ключа
+            service_account_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH')
+            
+            if service_account_path and os.path.exists(service_account_path):
+                cred = credentials.Certificate(service_account_path)
+                firebase_admin.initialize_app(cred, {
+                    'storageBucket': 'innomax-40d4d.appspot.com'  # Ваш bucket name
+                })
+                print("✅ Firebase initialized with service account file")
+                return True
+            
+            # Способ 2: Использование JSON строки из переменной окружения
+            service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+            
+            if service_account_json:
+                try:
+                    service_account_info = json.loads(service_account_json)
+                    cred = credentials.Certificate(service_account_info)
+                    firebase_admin.initialize_app(cred, {
+                        'storageBucket': 'innomax-40d4d.appspot.com'
+                    })
+                    print("✅ Firebase initialized with service account JSON")
+                    return True
+                except json.JSONDecodeError as e:
+                    print(f"❌ Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+            
+            # Способ 3: Попытка использовать Application Default Credentials (для Google Cloud)
+            try:
+                cred = credentials.ApplicationDefault()
+                firebase_admin.initialize_app(cred, {
+                    'storageBucket': 'innomax-40d4d.appspot.com'
+                })
+                print("✅ Firebase initialized with Application Default Credentials")
+                return True
+            except Exception as e:
+                print(f"❌ Failed to initialize with default credentials: {e}")
         
-        # Проверяем, что получили данные
-        if len(response.content) == 0:
-            raise Exception("Downloaded file is empty")
-        
-        # Сохраняем во временный файл сначала
-        temp_path = model_path + ".tmp"
-        with open(temp_path, 'wb') as f:
-            f.write(response.content)
-        
-        # Проверяем целостность скачанного файла
-        try:
-            test_load = joblib.load(temp_path)
-            # Переименовываем временный файл в основной
-            os.rename(temp_path, model_path)
-            print("Model downloaded and verified successfully")
-            return model_path
-        except Exception as e:
-            os.remove(temp_path)
-            raise Exception(f"Downloaded model file is corrupted: {e}")
+        else:
+            print("✅ Firebase already initialized")
+            return True
             
     except Exception as e:
-        print(f"Error downloading model: {e}")
-        raise
+        print(f"❌ Firebase initialization failed: {e}")
+        return False
+    
+    print("❌ No valid Firebase credentials found")
+    return False
 
-# Функция для загрузки модели с обработкой ошибок
-def load_model_safely(model_path):
+def download_model_from_firebase():
+    """Скачивает модель из Firebase Storage"""
     try:
-        print("Loading model...")
-        model_data = joblib.load(model_path)
+        bucket = storage.bucket()
         
-        # Проверяем структуру загруженных данных
-        if not isinstance(model_data, dict):
-            raise Exception("Model file does not contain expected dictionary structure")
+        # Путь к файлу в bucket (без начального слеша)
+        blob_name = "random_forest_model_0773_rmse_18.pkl"
+        blob = bucket.blob(blob_name)
         
-        required_keys = ['model']
-        for key in required_keys:
-            if key not in model_data:
-                raise Exception(f"Model file missing required key: {key}")
+        # Проверяем, существует ли файл
+        if not blob.exists():
+            raise Exception(f"File {blob_name} not found in bucket")
         
-        model = model_data['model']
-        scaler = model_data.get('scaler', None)
-        feature_names = model_data.get('feature_names', [])
+        # Создаем временный файл для скачивания
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as temp_file:
+            temp_path = temp_file.name
         
-        print(f"Model loaded successfully. Features: {len(feature_names)}")
-        return model, scaler, feature_names
+        # Скачиваем файл
+        print(f"Downloading {blob_name} from Firebase Storage...")
+        blob.download_to_filename(temp_path)
+        
+        # Проверяем размер скачанного файла
+        file_size = os.path.getsize(temp_path)
+        if file_size == 0:
+            raise Exception("Downloaded file is empty")
+        
+        print(f"✅ Model downloaded successfully ({file_size} bytes)")
+        
+        # Загружаем модель
+        model_data = joblib.load(temp_path)
+        
+        # Сохраняем модель локально для будущего использования
+        local_path = "model.pkl"
+        os.rename(temp_path, local_path)
+        print(f"✅ Model saved locally as {local_path}")
+        
+        return model_data
         
     except Exception as e:
-        print(f"Error loading model: {e}")
-        # Удаляем поврежденный файл
-        if os.path.exists(model_path):
-            os.remove(model_path)
-        raise
+        # Удаляем временный файл в случае ошибки
+        try:
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                os.unlink(temp_path)
+        except:
+            pass
+        raise Exception(f"Failed to download model from Firebase: {e}")
 
-# Инициализация модели с обработкой ошибок
+def load_model_with_fallback():
+    """Загружает модель: сначала из локального файла, потом из Firebase"""
+    model_path = "model.pkl"
+    
+    # Попытка 1: Загрузка из локального файла
+    if os.path.exists(model_path):
+        try:
+            print("Loading model from local file...")
+            model_data = joblib.load(model_path)
+            print("✅ Model loaded successfully from local file")
+            return model_data
+        except Exception as e:
+            print(f"❌ Failed to load local model: {e}")
+            print("Trying to download from Firebase...")
+    else:
+        print("Local model not found, downloading from Firebase...")
+    
+    # Попытка 2: Инициализация Firebase и скачивание
+    if not initialize_firebase():
+        raise Exception("Failed to initialize Firebase. Check your credentials.")
+    
+    try:
+        model_data = download_model_from_firebase()
+        print("✅ Model downloaded and loaded successfully from Firebase")
+        return model_data
+        
+    except Exception as e:
+        raise Exception(f"Failed to download/load model from Firebase: {e}")
+
+# Инициализация модели
 try:
-    model_path = download_model()
-    model, scaler, feature_names = load_model_safely(model_path)
-    print("Model initialization completed successfully")
+    model_data = load_model_with_fallback()
+    model = model_data['model']
+    scaler = model_data.get('scaler', None)
+    feature_names = model_data.get('feature_names', [])
+    print(f"Model initialization completed. Features: {len(feature_names)}")
 except Exception as e:
     print(f"Fatal error during model initialization: {e}")
     model, scaler, feature_names = None, None, []
@@ -109,7 +165,6 @@ def parse_array_field(x):
 
 def calculate_absorbance_features(measure, reference, dark, cal_data=None):
     try:
-        # Проверяем входные данные
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0:
             raise ValueError("Input arrays cannot be empty")
         
@@ -123,7 +178,7 @@ def calculate_absorbance_features(measure, reference, dark, cal_data=None):
         first_deriv = np.gradient(absorbance)
         second_deriv = np.gradient(first_deriv)
         n = len(absorbance)
-        q = max(1, n // 4)  # Избегаем деления на ноль
+        q = max(1, n // 4)
         
         features = {
             'abs_mean': np.mean(absorbance),
@@ -186,15 +241,10 @@ def predict_from_json(data):
     if not features:
         return {"error": "Failed to extract features"}, 400
 
-    # Создаем вектор признаков
     if len(feature_names) == 0:
         return {"error": "Feature names not available"}, 500
     
     X = np.array([features.get(feat, 0) for feat in feature_names]).reshape(1, -1)
-    
-    # Проверяем размерность
-    if X.shape[1] != len(feature_names):
-        return {"error": f"Feature dimension mismatch. Expected {len(feature_names)}, got {X.shape[1]}"}, 400
     
     if scaler:
         X = scaler.transform(X)
@@ -205,11 +255,23 @@ def predict_from_json(data):
 @app.route('/', methods=['GET'])
 def health_check():
     status = "healthy" if model is not None else "unhealthy"
+    model_source = "unknown"
+    
+    if model is not None:
+        if os.path.exists("model.pkl"):
+            model_source = "local_file"
+        else:
+            model_source = "downloaded"
+    
+    firebase_status = "initialized" if firebase_admin._apps else "not_initialized"
+    
     return jsonify({
         "status": status, 
         "message": "Glucose prediction API is running",
         "model_loaded": model is not None,
-        "features_count": len(feature_names)
+        "features_count": len(feature_names),
+        "model_source": model_source,
+        "firebase_status": firebase_status
     })
 
 @app.route('/predict', methods=['POST'])
@@ -228,29 +290,6 @@ def predict():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-@app.route('/reload-model', methods=['POST'])
-def reload_model():
-    """Эндпоинт для перезагрузки модели"""
-    global model, scaler, feature_names
-    try:
-        # Удаляем существующий файл модели
-        model_path = "model.pkl"
-        if os.path.exists(model_path):
-            os.remove(model_path)
-        
-        # Перезагружаем модель
-        model_path = download_model()
-        model, scaler, feature_names = load_model_safely(model_path)
-        
-        return jsonify({
-            "status": "success",
-            "message": "Model reloaded successfully",
-            "features_count": len(feature_names)
-        })
-    except Exception as e:
-        model, scaler, feature_names = None, None, []
-        return jsonify({"error": f"Failed to reload model: {str(e)}"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
