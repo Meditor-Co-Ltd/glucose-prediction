@@ -9,6 +9,7 @@ import firebase_admin
 from firebase_admin import credentials, storage
 import logging
 import sys
+import requests
 
 warnings.filterwarnings('ignore')
 
@@ -35,44 +36,71 @@ def initialize_firebase():
         
         # Проверяем, не инициализирован ли уже Firebase
         if not firebase_admin._apps:
-            # Способ 1: Использование переменной окружения с путем к файлу ключа
+            
+            # Способ 1: Использование пути к файлу
             service_account_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH')
-            logger.info(f"Checking service account path: {service_account_path}")
+            logger.info(f"Checking FIREBASE_SERVICE_ACCOUNT_PATH: {service_account_path}")
             
-            if service_account_path and os.path.exists(service_account_path):
-                logger.info("Found service account file, initializing...")
-                cred = credentials.Certificate(service_account_path)
-                firebase_admin.initialize_app(cred, {
-                    'storageBucket': 'innomax-40d4d.appspot.com'  # Ваш bucket name
-                })
-                logger.info("✅ Firebase initialized with service account file")
-                return True
-            
-            # Способ 2: Использование JSON строки из переменной окружения
+            # Способ 2: Создание файла из JSON переменной
             service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
-            logger.info(f"Checking service account JSON env var: {'present' if service_account_json else 'not found'}")
+            logger.info(f"Checking FIREBASE_SERVICE_ACCOUNT_JSON: {'present' if service_account_json else 'not found'}")
             
-            if service_account_json:
+            # Если есть JSON но нет пути к файлу, создаем временный файл
+            if service_account_json and not (service_account_path and os.path.exists(service_account_path)):
+                logger.info("Creating temporary service account file from JSON...")
                 try:
-                    # Логируем только первые и последние символы для безопасности
-                    json_preview = f"{service_account_json[:50]}...{service_account_json[-50:]}" if len(service_account_json) > 100 else "short_json"
-                    logger.info(f"Parsing service account JSON: {json_preview}")
+                    temp_path = './temp_firebase_service_account.json'
                     
+                    # Проверяем, что JSON валидный
                     service_account_info = json.loads(service_account_json)
                     logger.info(f"JSON parsed successfully, project_id: {service_account_info.get('project_id', 'unknown')}")
                     
+                    # Записываем в файл
+                    with open(temp_path, 'w') as f:
+                        json.dump(service_account_info, f, indent=2)
+                    
+                    service_account_path = temp_path
+                    logger.info(f"✅ Created temporary service account file: {service_account_path}")
+                    
+                except json.JSONDecodeError as e:
+                    logger.error(f"❌ Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to create service account file: {e}")
+            
+            # Инициализация с файлом (оригинальным или созданным)
+            if service_account_path and os.path.exists(service_account_path):
+                logger.info(f"Initializing Firebase with service account file: {service_account_path}")
+                try:
+                    # Проверяем содержимое файла
+                    with open(service_account_path, 'r') as f:
+                        file_content = json.load(f)
+                        logger.info(f"Service account file loaded, project_id: {file_content.get('project_id', 'unknown')}")
+                    
+                    cred = credentials.Certificate(service_account_path)
+                    firebase_admin.initialize_app(cred, {
+                        'storageBucket': 'innomax-40d4d.appspot.com'
+                    })
+                    logger.info("✅ Firebase initialized with service account file")
+                    return True
+                    
+                except Exception as e:
+                    logger.error(f"❌ Failed to initialize with service account file: {e}")
+            
+            # Fallback: прямая инициализация из JSON (если файл не сработал)
+            if service_account_json:
+                logger.info("Fallback: initializing directly from JSON string...")
+                try:
+                    service_account_info = json.loads(service_account_json)
                     cred = credentials.Certificate(service_account_info)
                     firebase_admin.initialize_app(cred, {
                         'storageBucket': 'innomax-40d4d.appspot.com'
                     })
-                    logger.info("✅ Firebase initialized with service account JSON")
+                    logger.info("✅ Firebase initialized directly from JSON")
                     return True
-                except json.JSONDecodeError as e:
-                    logger.error(f"❌ Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
                 except Exception as e:
-                    logger.error(f"❌ Error initializing Firebase with JSON: {e}")
+                    logger.error(f"❌ Failed to initialize directly from JSON: {e}")
             
-            # Способ 3: Попытка использовать Application Default Credentials (для Google Cloud)
+            # Способ 3: Application Default Credentials (для Google Cloud)
             try:
                 logger.info("Trying Application Default Credentials...")
                 cred = credentials.ApplicationDefault()
@@ -82,7 +110,7 @@ def initialize_firebase():
                 logger.info("✅ Firebase initialized with Application Default Credentials")
                 return True
             except Exception as e:
-                logger.warning(f"❌ Failed to initialize with default credentials: {e}")
+                logger.warning(f"❌ Failed with default credentials: {e}")
         
         else:
             logger.info("✅ Firebase already initialized")
@@ -97,11 +125,14 @@ def initialize_firebase():
     for key in os.environ:
         if 'FIREBASE' in key.upper():
             value = os.environ[key]
-            # Маскируем чувствительные данные
-            if len(value) > 50:
-                masked_value = f"{value[:20]}...{value[-20:]}"
+            if key.upper() == 'FIREBASE_SERVICE_ACCOUNT_JSON':
+                # Маскируем JSON содержимое
+                if len(value) > 100:
+                    masked_value = f"{value[:30]}...{value[-30:]}"
+                else:
+                    masked_value = "***JSON_PRESENT***"
             else:
-                masked_value = "***masked***"
+                masked_value = value
             logger.info(f"  {key}: {masked_value}")
     
     return False
@@ -113,20 +144,52 @@ def download_model_from_firebase():
         bucket = storage.bucket()
         logger.info(f"Bucket obtained: {bucket.name}")
         
-        # Путь к файлу в bucket (без начального слеша)
-        blob_name = "random_forest_model_0773_rmse_18.pkl"
-        logger.info(f"Looking for blob: {blob_name}")
-        blob = bucket.blob(blob_name)
+        # Пробуем разные возможные пути к файлу модели
+        possible_paths = [
+            "random_forest_model_0773_rmse_18.pkl",
+            "models/random_forest_model_0773_rmse_18.pkl",
+            "ml/random_forest_model_0773_rmse_18.pkl",
+            "model.pkl",
+            "data/random_forest_model_0773_rmse_18.pkl"
+        ]
         
-        # Проверяем, существует ли файл
-        logger.info("Checking if blob exists...")
-        if not blob.exists():
-            logger.error(f"File {blob_name} not found in bucket")
-            raise Exception(f"File {blob_name} not found in bucket")
+        blob = None
+        blob_name = None
         
-        logger.info("Blob exists, getting metadata...")
+        # Ищем файл по разным путям
+        for path in possible_paths:
+            logger.info(f"Trying path: {path}")
+            test_blob = bucket.blob(path)
+            
+            try:
+                if test_blob.exists():
+                    logger.info(f"✅ Found model at path: {path}")
+                    blob = test_blob
+                    blob_name = path
+                    break
+                else:
+                    logger.info(f"❌ Not found at path: {path}")
+            except Exception as e:
+                logger.warning(f"Error checking path {path}: {e}")
+        
+        if blob is None:
+            # Попробуем получить список файлов для диагностики
+            try:
+                logger.info("Model not found, listing bucket contents...")
+                blobs_list = list(bucket.list_blobs(max_results=10))
+                available_files = [b.name for b in blobs_list]
+                logger.error(f"Available files in bucket: {available_files}")
+            except Exception as list_error:
+                logger.error(f"Could not list bucket contents: {list_error}")
+            
+            raise Exception(f"Model file not found in any of the paths: {possible_paths}")
+        
+        logger.info("Getting blob metadata...")
         blob.reload()  # Загружаем метаданные
         logger.info(f"Blob size: {blob.size} bytes, updated: {blob.updated}")
+        
+        if blob.size == 0:
+            raise Exception("Model file exists but is empty (0 bytes)")
         
         # Создаем временный файл для скачивания
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as temp_file:
@@ -134,9 +197,25 @@ def download_model_from_firebase():
         
         logger.info(f"Created temp file: {temp_path}")
         
-        # Скачиваем файл
+        # Скачиваем файл с таймаутом
         logger.info(f"Starting download of {blob_name} from Firebase Storage...")
-        blob.download_to_filename(temp_path)
+        
+        try:
+            # Используем download_to_filename с retry логикой
+            blob.download_to_filename(temp_path)
+            logger.info("Download completed successfully")
+        except Exception as download_error:
+            logger.error(f"Download failed: {download_error}")
+            # Попробуем альтернативный способ скачивания
+            logger.info("Trying alternative download method...")
+            try:
+                data = blob.download_as_bytes()
+                with open(temp_path, 'wb') as f:
+                    f.write(data)
+                logger.info("Alternative download method succeeded")
+            except Exception as alt_error:
+                logger.error(f"Alternative download also failed: {alt_error}")
+                raise download_error
         
         # Проверяем размер скачанного файла
         file_size = os.path.getsize(temp_path)
@@ -145,11 +224,30 @@ def download_model_from_firebase():
         if file_size == 0:
             raise Exception("Downloaded file is empty")
         
+        if file_size != blob.size:
+            logger.warning(f"Size mismatch: expected {blob.size}, got {file_size}")
+        
         logger.info("✅ Model downloaded successfully, loading with joblib...")
         
         # Загружаем модель
-        model_data = joblib.load(temp_path)
-        logger.info(f"Model loaded, type: {type(model_data)}")
+        try:
+            model_data = joblib.load(temp_path)
+            logger.info(f"Model loaded successfully, type: {type(model_data)}")
+            
+            # Проверяем структуру модели
+            if isinstance(model_data, dict):
+                logger.info(f"Model data keys: {list(model_data.keys())}")
+            
+        except Exception as load_error:
+            logger.error(f"Failed to load model with joblib: {load_error}")
+            # Попробуем проверить, что это действительно pickle файл
+            try:
+                with open(temp_path, 'rb') as f:
+                    header = f.read(10)
+                    logger.info(f"File header (hex): {header.hex()}")
+            except:
+                pass
+            raise load_error
         
         # Сохраняем модель локально для будущего использования
         local_path = "model.pkl"
@@ -169,8 +267,41 @@ def download_model_from_firebase():
             logger.warning(f"Failed to cleanup temp file: {cleanup_e}")
         raise Exception(f"Failed to download model from Firebase: {e}")
 
+def download_model_http_fallback():
+    """Fallback загрузка модели через HTTP"""
+    url = "https://firebasestorage.googleapis.com/v0/b/innomax-40d4d.appspot.com/o/random_forest_model_0773_rmse_18.pkl?alt=media&token=aff5ea98-27a7-4e28-b830-d5f7c731dac5"
+    
+    try:
+        logger.info("Fallback: downloading model via HTTP...")
+        response = requests.get(url, timeout=120)
+        response.raise_for_status()
+        
+        if len(response.content) == 0:
+            raise Exception("HTTP response is empty")
+        
+        logger.info(f"HTTP download successful, size: {len(response.content)} bytes")
+        
+        # Сохраняем файл
+        with open("model.pkl", 'wb') as f:
+            f.write(response.content)
+        
+        # Загружаем модель
+        model_data = joblib.load("model.pkl")
+        logger.info("✅ Model loaded successfully via HTTP fallback")
+        return model_data
+        
+    except requests.exceptions.HTTPError as e:
+        if hasattr(e, 'response') and e.response.status_code == 402:
+            logger.error("HTTP fallback failed: Payment Required (402) - URL expired")
+        else:
+            logger.error(f"HTTP fallback failed: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"HTTP fallback failed: {e}")
+        return None
+
 def load_model_with_fallback():
-    """Загружает модель: сначала из локального файла, потом из Firebase"""
+    """Загружает модель: локальный файл → Firebase Storage → HTTP fallback"""
     model_path = "model.pkl"
     
     # Попытка 1: Загрузка из локального файла
@@ -186,19 +317,31 @@ def load_model_with_fallback():
     else:
         logger.info("Local model not found, downloading from Firebase...")
     
-    # Попытка 2: Инициализация Firebase и скачивание
-    logger.info("Initializing Firebase for model download...")
-    if not initialize_firebase():
-        raise Exception("Failed to initialize Firebase. Check your credentials.")
+    # Попытка 2: Firebase Storage
+    if initialize_firebase():
+        try:
+            model_data = download_model_from_firebase()
+            logger.info("✅ Model downloaded and loaded successfully from Firebase Storage")
+            return model_data
+        except Exception as e:
+            logger.error(f"❌ Firebase Storage download failed: {e}")
+            logger.info("Trying HTTP fallback...")
+    else:
+        logger.error("❌ Firebase initialization failed, trying HTTP fallback...")
     
+    # Попытка 3: HTTP fallback
     try:
-        model_data = download_model_from_firebase()
-        logger.info("✅ Model downloaded and loaded successfully from Firebase")
-        return model_data
-        
+        model_data = download_model_http_fallback()
+        if model_data:
+            logger.info("✅ Model loaded successfully via HTTP fallback")
+            return model_data
+        else:
+            logger.error("❌ HTTP fallback also failed")
     except Exception as e:
-        logger.error(f"Failed to download/load model from Firebase: {e}")
-        raise Exception(f"Failed to download/load model from Firebase: {e}")
+        logger.error(f"❌ HTTP fallback failed: {e}")
+    
+    # Если все попытки провалились
+    raise Exception("Failed to load model from all sources: local file, Firebase Storage, and HTTP fallback")
 
 # Инициализация модели
 logger.info("=== Starting model initialization ===")
@@ -337,20 +480,44 @@ def health_check():
     
     firebase_status = "initialized" if firebase_admin._apps else "not_initialized"
     
-    # Дополнительная диагностическая информация
+    # Расширенная диагностическая информация
     diagnostics = {
         "firebase_credentials_configured": bool(
             os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON') or 
             os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH')
         ),
         "local_model_exists": os.path.exists("model.pkl"),
+        "temp_firebase_file_exists": os.path.exists("./temp_firebase_service_account.json"),
         "environment": {
             "PORT": os.environ.get('PORT', 'not_set'),
             "PYTHONUNBUFFERED": os.environ.get('PYTHONUNBUFFERED', 'not_set'),
             "has_firebase_json": bool(os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')),
             "has_firebase_path": bool(os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH')),
+            "firebase_path_value": os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH', 'not_set'),
+        },
+        "file_system": {
+            "working_directory": os.getcwd(),
+            "files_in_root": [f for f in os.listdir('.') if f.endswith(('.json', '.pkl', '.py'))],
         }
     }
+    
+    # Проверяем доступ к файлу, если путь указан
+    firebase_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH')
+    if firebase_path:
+        diagnostics["firebase_file_check"] = {
+            "path": firebase_path,
+            "exists": os.path.exists(firebase_path),
+            "is_readable": False
+        }
+        
+        if os.path.exists(firebase_path):
+            try:
+                with open(firebase_path, 'r') as f:
+                    content = json.load(f)
+                    diagnostics["firebase_file_check"]["is_readable"] = True
+                    diagnostics["firebase_file_check"]["project_id"] = content.get('project_id', 'unknown')
+            except Exception as e:
+                diagnostics["firebase_file_check"]["read_error"] = str(e)
     
     # Логируем результат health check
     logger.info(f"Health check: status={status}, firebase={firebase_status}, model_loaded={model is not None}")
@@ -367,12 +534,82 @@ def health_check():
     
     # Если что-то не так, добавляем детали
     if status == "unhealthy":
-        if not firebase_status == "initialized":
-            response["error_details"] = "Firebase not initialized - check credentials"
-        elif not model:
-            response["error_details"] = "Model failed to load - check Firebase Storage and model file"
+        error_details = []
+        if firebase_status != "initialized":
+            error_details.append("Firebase not initialized - check credentials")
+        if not model:
+            error_details.append("Model failed to load - check Firebase Storage and model file")
+        response["error_details"] = error_details
     
     return jsonify(response)
+
+@app.route('/debug-storage', methods=['GET'])
+def debug_storage():
+    """Диагностика Firebase Storage"""
+    try:
+        if not firebase_admin._apps:
+            return jsonify({"error": "Firebase not initialized"}), 500
+        
+        logger.info("Debug: Checking Firebase Storage...")
+        bucket = storage.bucket()
+        logger.info(f"Debug: Connected to bucket: {bucket.name}")
+        
+        # Список файлов в bucket (ограничиваем для безопасности)
+        try:
+            blobs = list(bucket.list_blobs(max_results=20))
+            files = [{"name": blob.name, "size": blob.size, "updated": str(blob.updated)} for blob in blobs]
+            logger.info(f"Debug: Found {len(files)} files in bucket")
+        except Exception as e:
+            logger.error(f"Debug: Failed to list files: {e}")
+            files = []
+        
+        # Проверяем конкретный файл модели
+        target_file = "random_forest_model_0773_rmse_18.pkl"
+        target_blob = bucket.blob(target_file)
+        
+        target_info = {
+            "name": target_file,
+            "exists": False,
+            "size": None,
+            "updated": None,
+            "error": None
+        }
+        
+        try:
+            target_info["exists"] = target_blob.exists()
+            if target_info["exists"]:
+                target_blob.reload()  # Загружаем метаданные
+                target_info["size"] = target_blob.size
+                target_info["updated"] = str(target_blob.updated)
+                logger.info(f"Debug: Target file exists, size: {target_info['size']}")
+            else:
+                logger.warning("Debug: Target file does not exist")
+        except Exception as e:
+            target_info["error"] = str(e)
+            logger.error(f"Debug: Error checking target file: {e}")
+        
+        # Ищем файлы похожие на модель
+        model_files = [f for f in files if '.pkl' in f['name'] or 'model' in f['name'].lower()]
+        
+        return jsonify({
+            "bucket_name": bucket.name,
+            "total_files": len(files),
+            "all_files": files,
+            "target_file": target_info,
+            "model_files": model_files,
+            "debug_info": {
+                "firebase_initialized": bool(firebase_admin._apps),
+                "bucket_accessible": True
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Debug: Storage debug failed: {e}")
+        return jsonify({
+            "error": str(e),
+            "firebase_initialized": bool(firebase_admin._apps),
+            "bucket_accessible": False
+        }), 500
 
 @app.route('/predict', methods=['POST'])
 def predict():
