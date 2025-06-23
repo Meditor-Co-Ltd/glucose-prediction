@@ -10,6 +10,7 @@ from firebase_admin import credentials, storage
 import logging
 import sys
 import requests
+import traceback
 
 warnings.filterwarnings('ignore')
 
@@ -308,26 +309,63 @@ def load_model_with_fallback():
     if os.path.exists(model_path):
         try:
             logger.info("Loading model from local file...")
+            
+            # Дополнительная диагностика
+            file_size = os.path.getsize(model_path)
+            logger.info(f"Local model file size: {file_size} bytes")
+            
+            if file_size == 0:
+                logger.error("Local model file is empty (0 bytes)")
+                raise Exception("Local model file is empty")
+            
+            # Проверяем что файл можно прочитать
+            with open(model_path, 'rb') as f:
+                header = f.read(10)
+                logger.info(f"Local model file header: {header.hex()}")
+            
+            # Пробуем загрузить
+            logger.info("Attempting joblib.load()...")
             model_data = joblib.load(model_path)
+            logger.info(f"Model data loaded, type: {type(model_data)}")
+            
+            # Проверяем структуру
+            if isinstance(model_data, dict):
+                logger.info(f"Model data keys: {list(model_data.keys())}")
+                if 'model' in model_data:
+                    logger.info(f"Model object type: {type(model_data['model'])}")
+                if 'feature_names' in model_data:
+                    logger.info(f"Feature names count: {len(model_data.get('feature_names', []))}")
+            else:
+                logger.warning(f"Model data is not a dict, type: {type(model_data)}")
+            
             logger.info("✅ Model loaded successfully from local file")
             return model_data
+            
         except Exception as e:
             logger.error(f"❌ Failed to load local model: {e}")
+            logger.error(f"Exception type: {type(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             logger.info("Trying to download from Firebase...")
     else:
         logger.info("Local model not found, downloading from Firebase...")
     
-    # Попытка 2: Firebase Storage
-    if initialize_firebase():
-        try:
-            model_data = download_model_from_firebase()
-            logger.info("✅ Model downloaded and loaded successfully from Firebase Storage")
-            return model_data
-        except Exception as e:
-            logger.error(f"❌ Firebase Storage download failed: {e}")
-            logger.info("Trying HTTP fallback...")
+    # Проверяем флаг принудительного HTTP fallback
+    force_http = os.environ.get('FORCE_HTTP_FALLBACK', '').lower() in ['true', '1', 'yes']
+    
+    if force_http:
+        logger.info("🔄 FORCE_HTTP_FALLBACK is enabled, skipping Firebase...")
     else:
-        logger.error("❌ Firebase initialization failed, trying HTTP fallback...")
+        # Попытка 2: Firebase Storage
+        if initialize_firebase():
+            try:
+                model_data = download_model_from_firebase()
+                logger.info("✅ Model downloaded and loaded successfully from Firebase Storage")
+                return model_data
+            except Exception as e:
+                logger.error(f"❌ Firebase Storage download failed: {e}")
+                logger.info("Trying HTTP fallback...")
+        else:
+            logger.error("❌ Firebase initialization failed, trying HTTP fallback...")
     
     # Попытка 3: HTTP fallback
     try:
@@ -488,12 +526,14 @@ def health_check():
         ),
         "local_model_exists": os.path.exists("model.pkl"),
         "temp_firebase_file_exists": os.path.exists("./temp_firebase_service_account.json"),
+        "force_http_fallback": os.environ.get('FORCE_HTTP_FALLBACK', '').lower() in ['true', '1', 'yes'],
         "environment": {
             "PORT": os.environ.get('PORT', 'not_set'),
             "PYTHONUNBUFFERED": os.environ.get('PYTHONUNBUFFERED', 'not_set'),
             "has_firebase_json": bool(os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')),
             "has_firebase_path": bool(os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH')),
             "firebase_path_value": os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH', 'not_set'),
+            "force_http_fallback": os.environ.get('FORCE_HTTP_FALLBACK', 'not_set'),
         },
         "file_system": {
             "working_directory": os.getcwd(),
@@ -542,6 +582,78 @@ def health_check():
         response["error_details"] = error_details
     
     return jsonify(response)
+
+@app.route('/debug-model', methods=['GET'])
+def debug_model():
+    """Диагностика локального файла модели"""
+    try:
+        model_path = "model.pkl"
+        
+        result = {
+            "file_exists": os.path.exists(model_path),
+            "file_size": 0,
+            "file_readable": False,
+            "joblib_loadable": False,
+            "model_structure": None,
+            "error": None
+        }
+        
+        if os.path.exists(model_path):
+            # Проверяем размер файла
+            result["file_size"] = os.path.getsize(model_path)
+            
+            # Проверяем читаемость
+            try:
+                with open(model_path, 'rb') as f:
+                    header = f.read(20)
+                    result["file_readable"] = True
+                    result["file_header_hex"] = header.hex()
+                    
+                    # Проверяем что это pickle файл
+                    f.seek(0)
+                    first_bytes = f.read(2)
+                    result["is_pickle"] = first_bytes in [b'\x80\x03', b'\x80\x04', b'\x80\x05']  # Pickle protocol versions
+                    
+            except Exception as e:
+                result["read_error"] = str(e)
+            
+            # Пробуем загрузить через joblib
+            try:
+                logger.info("Debug: Attempting to load model with joblib...")
+                model_data = joblib.load(model_path)
+                result["joblib_loadable"] = True
+                result["model_type"] = str(type(model_data))
+                
+                if isinstance(model_data, dict):
+                    result["model_structure"] = {
+                        "is_dict": True,
+                        "keys": list(model_data.keys()),
+                        "key_types": {k: str(type(v)) for k, v in model_data.items()}
+                    }
+                    
+                    # Проверяем обязательные ключи
+                    required_keys = ['model', 'scaler', 'feature_names']
+                    result["has_required_keys"] = {key: key in model_data for key in required_keys}
+                    
+                    if 'feature_names' in model_data:
+                        result["feature_count"] = len(model_data.get('feature_names', []))
+                else:
+                    result["model_structure"] = {
+                        "is_dict": False,
+                        "type": str(type(model_data))
+                    }
+                    
+                logger.info("Debug: Model loaded successfully in debug mode")
+                
+            except Exception as e:
+                result["joblib_error"] = str(e)
+                logger.error(f"Debug: Failed to load model: {e}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Debug model failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/debug-storage', methods=['GET'])
 def debug_storage():
