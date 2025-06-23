@@ -583,6 +583,32 @@ def health_check():
     
     return jsonify(response)
 
+@app.route('/cleanup-model', methods=['POST'])
+def cleanup_model():
+    """Удаляет поврежденные файлы модели для пересоздания"""
+    try:
+        files_to_remove = [
+            "model.pkl",
+            "temp_firebase_service_account.json"
+        ]
+        
+        removed_files = []
+        for file_path in files_to_remove:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                removed_files.append(file_path)
+                logger.info(f"Removed file: {file_path}")
+        
+        return jsonify({
+            "success": True,
+            "removed_files": removed_files,
+            "message": "Corrupted model files removed. Restart the app to re-download."
+        })
+        
+    except Exception as e:
+        logger.error(f"Cleanup failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/debug-model', methods=['GET'])
 def debug_model():
     """Диагностика локального файла модели"""
