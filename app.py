@@ -5,69 +5,96 @@ import joblib
 from flask import Flask, request, jsonify
 import warnings
 import requests
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
-import logging
+import hashlib
 
 warnings.filterwarnings('ignore')
 
-# Configure logging for debugging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 app = Flask(__name__)
 
-# ВАЖНО: Настройки для Railway
-app.config['DEBUG'] = False
-app.config['TESTING'] = False
+# Функция для скачивания модели с проверкой целостности
+def download_model():
+    model_path = "model.pkl"
+    
+    # Удаляем существующий файл если он поврежден
+    if os.path.exists(model_path):
+        try:
+            # Пробуем загрузить существующий файл
+            test_load = joblib.load(model_path)
+            print("Existing model file is valid")
+            return model_path
+        except Exception as e:
+            print(f"Existing model file is corrupted: {e}")
+            os.remove(model_path)
+    
+    print("Downloading model...")
+    url = "https://firebasestorage.googleapis.com/v0/b/innomax-40d4d.appspot.com/o/random_forest_model_0773_rmse_18.pkl?alt=media&token=aff5ea98-27a7-4e28-b830-d5f7c731dac5"
+    
+    try:
+        # Скачиваем с проверкой статуса
+        response = requests.get(url, timeout=60)
+        response.raise_for_status()
+        
+        # Проверяем, что получили данные
+        if len(response.content) == 0:
+            raise Exception("Downloaded file is empty")
+        
+        # Сохраняем во временный файл сначала
+        temp_path = model_path + ".tmp"
+        with open(temp_path, 'wb') as f:
+            f.write(response.content)
+        
+        # Проверяем целостность скачанного файла
+        try:
+            test_load = joblib.load(temp_path)
+            # Переименовываем временный файл в основной
+            os.rename(temp_path, model_path)
+            print("Model downloaded and verified successfully")
+            return model_path
+        except Exception as e:
+            os.remove(temp_path)
+            raise Exception(f"Downloaded model file is corrupted: {e}")
+            
+    except Exception as e:
+        print(f"Error downloading model: {e}")
+        raise
 
-# Mock model creation
-def create_mock_model():
-    """Creates a mock model with the expected structure for testing"""
-    logger.info("Creating mock model for testing...")
-    
-    feature_names = [
-        'abs_mean', 'abs_std', 'abs_max', 'abs_min', 'abs_median', 'abs_range',
-        'abs_q25', 'abs_q75', 'abs_iqr', 'abs_area', 'abs_area_positive', 
-        'abs_area_negative', 'abs_quarter1', 'abs_quarter2', 'abs_quarter3', 
-        'abs_quarter4', 'abs_deriv1_mean', 'abs_deriv1_std', 'abs_deriv2_mean', 
-        'abs_deriv2_std', 'abs_gradient_start_end', 'abs_gradient_q1_q4', 
-        'abs_n_peaks', 'abs_n_valleys', 'measure_mean', 'measure_std', 
-        'reference_mean', 'reference_std', 'dark_mean', 'signal_to_noise',
-        'cal_mean', 'cal_std', 'cal_range'
-    ]
-    
-    model = RandomForestRegressor(n_estimators=10, random_state=42)
-    
-    n_samples = 100
-    X_dummy = np.random.randn(n_samples, len(feature_names))
-    y_dummy = np.random.uniform(70, 200, n_samples)
-    
-    model.fit(X_dummy, y_dummy)
-    
-    scaler = StandardScaler()
-    scaler.fit(X_dummy)
-    
-    model_data = {
-        'model': model,
-        'scaler': scaler,
-        'feature_names': feature_names
-    }
-    
-    return model_data
+# Функция для загрузки модели с обработкой ошибок
+def load_model_safely(model_path):
+    try:
+        print("Loading model...")
+        model_data = joblib.load(model_path)
+        
+        # Проверяем структуру загруженных данных
+        if not isinstance(model_data, dict):
+            raise Exception("Model file does not contain expected dictionary structure")
+        
+        required_keys = ['model']
+        for key in required_keys:
+            if key not in model_data:
+                raise Exception(f"Model file missing required key: {key}")
+        
+        model = model_data['model']
+        scaler = model_data.get('scaler', None)
+        feature_names = model_data.get('feature_names', [])
+        
+        print(f"Model loaded successfully. Features: {len(feature_names)}")
+        return model, scaler, feature_names
+        
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        # Удаляем поврежденный файл
+        if os.path.exists(model_path):
+            os.remove(model_path)
+        raise
 
-# Initialize model
+# Инициализация модели с обработкой ошибок
 try:
-    # Для Railway всегда используем mock model для простоты
-    model_data = create_mock_model()
-    model = model_data['model']
-    scaler = model_data.get('scaler', None)
-    feature_names = model_data.get('feature_names', [])
-    is_mock_model = True
-    logger.info(f"Model initialization completed. Features: {len(feature_names)}")
+    model_path = download_model()
+    model, scaler, feature_names = load_model_safely(model_path)
+    print("Model initialization completed successfully")
 except Exception as e:
-    logger.error(f"Fatal error during model initialization: {e}")
-    model, scaler, feature_names, is_mock_model = None, None, [], True
+    print(f"Fatal error during model initialization: {e}")
+    model, scaler, feature_names = None, None, []
 
 def parse_array_field(x):
     if isinstance(x, str):
@@ -82,6 +109,7 @@ def parse_array_field(x):
 
 def calculate_absorbance_features(measure, reference, dark, cal_data=None):
     try:
+        # Проверяем входные данные
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0:
             raise ValueError("Input arrays cannot be empty")
         
@@ -95,7 +123,7 @@ def calculate_absorbance_features(measure, reference, dark, cal_data=None):
         first_deriv = np.gradient(absorbance)
         second_deriv = np.gradient(first_deriv)
         n = len(absorbance)
-        q = max(1, n // 4)
+        q = max(1, n // 4)  # Избегаем деления на ноль
         
         features = {
             'abs_mean': np.mean(absorbance),
@@ -139,7 +167,7 @@ def calculate_absorbance_features(measure, reference, dark, cal_data=None):
         
         return features
     except Exception as e:
-        logger.error(f"Error in feature calculation: {e}")
+        print(f"Error in feature calculation: {e}")
         return None
 
 def predict_from_json(data):
@@ -158,154 +186,72 @@ def predict_from_json(data):
     if not features:
         return {"error": "Failed to extract features"}, 400
 
+    # Создаем вектор признаков
     if len(feature_names) == 0:
         return {"error": "Feature names not available"}, 500
     
     X = np.array([features.get(feat, 0) for feat in feature_names]).reshape(1, -1)
     
+    # Проверяем размерность
+    if X.shape[1] != len(feature_names):
+        return {"error": f"Feature dimension mismatch. Expected {len(feature_names)}, got {X.shape[1]}"}, 400
+    
     if scaler:
         X = scaler.transform(X)
 
     prediction = model.predict(X)[0]
-    
-    result = {"predicted_glucose": round(float(prediction), 2)}
-    if is_mock_model:
-        result["warning"] = "Using mock model for testing. Results are not medically accurate."
-    
-    return result
+    return {"predicted_glucose": round(float(prediction), 2)}
 
-# Middleware для логирования всех запросов
-@app.before_request
-def log_request_info():
-    logger.info('--- New Request ---')
-    logger.info(f'Method: {request.method}')
-    logger.info(f'URL: {request.url}')
-    logger.info(f'Path: {request.path}')
-    logger.info(f'Headers: {dict(request.headers)}')
-    logger.info(f'Args: {request.args}')
-    if request.method in ['POST', 'PUT', 'PATCH']:
-        logger.info(f'Content-Type: {request.content_type}')
-        logger.info(f'Data: {request.get_data(as_text=True)[:500]}...')
-
-# ИСПРАВЛЕНИЕ 1: Удаляем trailing slash проблемы
-@app.route('/', methods=['GET'], strict_slashes=False)
+@app.route('/', methods=['GET'])
 def health_check():
     status = "healthy" if model is not None else "unhealthy"
     return jsonify({
         "status": status, 
         "message": "Glucose prediction API is running",
         "model_loaded": model is not None,
-        "features_count": len(feature_names),
-        "model_type": "mock" if is_mock_model else "production",
-        "warning": "Using mock model - not medically accurate" if is_mock_model else None,
-        "method_received": request.method,
-        "url_received": request.url
+        "features_count": len(feature_names)
     })
 
-# ИСПРАВЛЕНИЕ 2: Добавляем поддержку OPTIONS для CORS
-@app.route('/predict', methods=['POST', 'OPTIONS'], strict_slashes=False)
+@app.route('/predict', methods=['POST'])
 def predict():
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        return response
-    
-    # Логируем подробности запроса
-    logger.info(f"PREDICT endpoint called with method: {request.method}")
-    logger.info(f"Content-Type: {request.content_type}")
-    logger.info(f"Is JSON: {request.is_json}")
-    
     try:
         if model is None:
             return jsonify({"error": "Model not loaded. Please restart the service."}), 503
         
-        # Проверяем метод запроса
-        if request.method != 'POST':
-            return jsonify({
-                "error": f"Method {request.method} not allowed. Use POST.",
-                "received_method": request.method,
-                "expected_method": "POST"
-            }), 405
-        
         data = request.get_json()
         if not data:
-            return jsonify({
-                "error": "No JSON data provided",
-                "content_type": request.content_type,
-                "data_received": request.get_data(as_text=True)[:200]
-            }), 400
+            return jsonify({"error": "No JSON data provided"}), 400
         
         result = predict_from_json(data)
         if isinstance(result, tuple):
-            response = jsonify(result[0])
-            response.status_code = result[1]
-        else:
-            response = jsonify(result)
-        
-        # Добавляем CORS headers
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-        
+            return jsonify(result[0]), result[1]
+        return jsonify(result)
     except Exception as e:
-        logger.error(f"Error in predict endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
-# ИСПРАВЛЕНИЕ 3: Добавляем debug endpoint
-@app.route('/debug', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], strict_slashes=False)
-def debug():
-    return jsonify({
-        "method": request.method,
-        "url": request.url,
-        "path": request.path,
-        "headers": dict(request.headers),
-        "args": dict(request.args),
-        "form": dict(request.form),
-        "json": request.get_json() if request.is_json else None,
-        "data": request.get_data(as_text=True)[:500]
-    })
-
-# ИСПРАВЛЕНИЕ 4: Глобальный CORS handler
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
-
-# ИСПРАВЛЕНИЕ 5: Ловим все 404 для диагностики
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({
-        "error": "Endpoint not found",
-        "method": request.method,
-        "path": request.path,
-        "available_endpoints": [
-            "GET /",
-            "POST /predict", 
-            "GET,POST /debug"
-        ]
-    }), 404
-
-# ИСПРАВЛЕНИЕ 6: Ловим метод не разрешен
-@app.errorhandler(405)
-def method_not_allowed(error):
-    return jsonify({
-        "error": "Method not allowed",
-        "method": request.method,
-        "path": request.path,
-        "message": "Check if you're using the correct HTTP method"
-    }), 405
+@app.route('/reload-model', methods=['POST'])
+def reload_model():
+    """Эндпоинт для перезагрузки модели"""
+    global model, scaler, feature_names
+    try:
+        # Удаляем существующий файл модели
+        model_path = "model.pkl"
+        if os.path.exists(model_path):
+            os.remove(model_path)
+        
+        # Перезагружаем модель
+        model_path = download_model()
+        model, scaler, feature_names = load_model_safely(model_path)
+        
+        return jsonify({
+            "status": "success",
+            "message": "Model reloaded successfully",
+            "features_count": len(feature_names)
+        })
+    except Exception as e:
+        model, scaler, feature_names = None, None, []
+        return jsonify({"error": f"Failed to reload model: {str(e)}"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
-    # ВАЖНО: Для Railway отключаем reloader и используем threaded
-    app.run(
-        host='0.0.0.0', 
-        port=port, 
-        debug=False, 
-        use_reloader=False,
-        threaded=True
-    )
+    app.run(host='0.0.0.0', port=port, debug=False)
