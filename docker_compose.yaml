@@ -1,43 +1,109 @@
-version: '3.8'
+# Настройка Firebase Service Account
 
+## 1. Получение Service Account ключа
+
+1. Перейдите в Firebase Console: https://console.firebase.google.com/
+2. Выберите ваш проект `innomax-40d4d`
+3. Перейдите в "Project Settings" (шестеренка в левом меню)
+4. Вкладка "Service accounts"
+5. Нажмите "Generate new private key"
+6. Скачайте JSON файл
+
+## 2. Способы настройки (выберите один)
+
+### Способ 1: Файл service account (рекомендуемый для локальной разработки)
+
+```bash
+# Сохраните скачанный JSON файл как firebase-service-account.json
+export FIREBASE_SERVICE_ACCOUNT_PATH="/path/to/firebase-service-account.json"
+```
+
+### Способ 2: JSON строка в переменной окружения (для production)
+
+```bash
+# Вставьте содержимое JSON файла в одну строку
+export FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"innomax-40d4d","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}'
+```
+
+### Способ 3: Application Default Credentials (для Google Cloud Platform)
+
+Если приложение запускается в Google Cloud (App Engine, Cloud Run, GCE), то credentials будут найдены автоматически.
+
+## 3. Пример .env файла
+
+```env
+PORT=8000
+FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
+# ИЛИ
+# FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+```
+
+## 4. Загрузка .env файла (опционально)
+
+Если используете .env файл, добавьте в начало app.py:
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+```
+
+И добавьте в requirements.txt:
+```
+python-dotenv==1.0.0
+```
+
+## 5. Docker настройка
+
+### Dockerfile
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Копируем service account файл
+COPY firebase-service-account.json .
+
+ENV FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
+
+EXPOSE 8000
+
+CMD ["python", "app.py"]
+```
+
+### docker-compose.yml
+```yaml
+version: '3.8'
 services:
   glucose-api:
     build: .
     ports:
       - "8000:8000"
     environment:
-      - FLASK_ENV=production
-      - PORT=8000
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Опционально: Redis для кеширования
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    command: redis-server --appendonly yes
+      - FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
+      # ИЛИ
+      # - FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
     volumes:
-      - redis_data:/data
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+```
 
-  # Опционально: Nginx как reverse proxy
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro  # Если есть SSL сертификаты
-    depends_on:
-      - glucose-api
-    restart: unless-stopped
+## 6. Проверка настройки
 
-volumes:
-  redis_data:
+После запуска приложения проверьте эндпоинт:
+```bash
+curl http://localhost:8000/
+```
+
+В ответе должно быть:
+```json
+{
+  "status": "healthy",
+  "firebase_status": "initialized",
+  "model_loaded": true,
+  ...
+}
+```
