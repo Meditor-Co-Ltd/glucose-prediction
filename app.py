@@ -147,11 +147,11 @@ def download_model_from_firebase():
         
         # Пробуем разные возможные пути к файлу модели
         possible_paths = [
-            "random_forest_model_0773_rmse_18.pkl",
-            "models/random_forest_model_0773_rmse_18.pkl",
-            "ml/random_forest_model_0773_rmse_18.pkl",
+            "optimized_rf_model.pkl",
+            "models/optimized_rf_model.pkl",
+            "ml/optimized_rf_model.pkl",
             "model.pkl",
-            "data/random_forest_model_0773_rmse_18.pkl"
+            "data/optimized_rf_model.pkl"
         ]
         
         blob = None
