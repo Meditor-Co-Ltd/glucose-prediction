@@ -270,7 +270,7 @@ def download_model_from_firebase():
 
 def download_model_http_fallback():
     """Fallback загрузка модели через HTTP"""
-    url = "https://firebasestorage.googleapis.com/v0/b/innomax-40d4d.appspot.com/o/random_forest_model_0773_rmse_18.pkl?alt=media&token=aff5ea98-27a7-4e28-b830-d5f7c731dac5"
+    url = "https://firebasestorage.googleapis.com/v0/b/innomax-40d4d.appspot.com/o/optimized_rf_model.pkl?alt=media&token=346d4fad-ead1-41bf-87f6-b6b93b28dcf1"
     
     try:
         logger.info("Fallback: downloading model via HTTP...")
@@ -702,7 +702,7 @@ def debug_storage():
             files = []
         
         # Проверяем конкретный файл модели
-        target_file = "random_forest_model_0773_rmse_18.pkl"
+        target_file = "optimized_rf_model.pkl"
         target_blob = bucket.blob(target_file)
         
         target_info = {
