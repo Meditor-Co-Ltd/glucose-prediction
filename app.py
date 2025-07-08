@@ -11,6 +11,8 @@ import logging
 import sys
 import requests
 import traceback
+import utils
+import model_loader
 
 warnings.filterwarnings('ignore')
 
@@ -479,9 +481,11 @@ def calculate_absorbance_features(measure, reference, dark, cal_data=None):
         return None
 
 def predict_from_json(data):
-    if model is None:
-        return {"error": "Model not loaded. Please restart the service."}, 500
+    # if model is None:
+    #     return {"error": "Model not loaded. Please restart the service."}, 500
     
+    model = utils.load_model()
+
     if isinstance(data, list):
         data = data[0]
     
@@ -490,19 +494,24 @@ def predict_from_json(data):
     dark = parse_array_field(data.get("dark"))
     cal_data = parse_array_field(data.get("cal_data"))
 
-    features = calculate_absorbance_features(measure, reference, dark, cal_data)
-    if not features:
-        return {"error": "Failed to extract features"}, 400
+    # features = calculate_absorbance_features(measure, reference, dark, cal_data)
+    # if not features:
+    #     return {"error": "Failed to extract features"}, 400
 
-    if len(feature_names) == 0:
-        return {"error": "Feature names not available"}, 500
+    # if len(feature_names) == 0:
+    #     return {"error": "Feature names not available"}, 500
     
-    X = np.array([features.get(feat, 0) for feat in feature_names]).reshape(1, -1)
+    # X = np.array([features.get(feat, 0) for feat in feature_names]).reshape(1, -1)
     
-    if scaler:
-        X = scaler.transform(X)
+    # if scaler:
+    #     X = scaler.transform(X)
 
-    prediction = model.predict(X)[0]
+    # prediction = model.predict(X)[0]
+
+    x = utils.preprocess_data(measure, reference, dark, cal_data)
+    prediction = utils.model_inference(model, x)
+    prediction = utils.rescale_prediction(prediction)
+
     return {"predicted_glucose": round(float(prediction), 2)}
 
 @app.route('/', methods=['GET'])
