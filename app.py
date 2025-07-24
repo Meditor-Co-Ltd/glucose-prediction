@@ -587,7 +587,7 @@ def predict_from_json(data):
     # if model is None:
     #     return {"error": "Model not loaded. Please restart the service."}, 500
     
-    model = utils.load_model()
+    model = load_model()
 
     if isinstance(data, list):
         data = data[0]
@@ -599,7 +599,7 @@ def predict_from_json(data):
 
     # features = calculate_absorbance_features(measure, reference, dark, cal_data)
     # if not features:
-    #     return {"error": "Failed to extract features"}, 400
+    #     return {"error": "Failed to extract features"}, 400``
 
     # if len(feature_names) == 0:
     #     return {"error": "Feature names not available"}, 500
@@ -611,9 +611,9 @@ def predict_from_json(data):
 
     # prediction = model.predict(X)[0]
 
-    x = utils.preprocess_data(measure, reference, dark, cal_data)
-    prediction = utils.model_inference(model, x)
-    prediction = utils.rescale_prediction(prediction)
+    x = preprocess_data(measure, reference, dark, cal_data)
+    prediction = model_inference(model, x)
+    prediction = rescale_prediction(prediction)
 
     return {"predicted_glucose": round(float(prediction), 2)}
 
