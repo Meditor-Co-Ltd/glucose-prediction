@@ -310,38 +310,17 @@ def load_model_with_fallback():
     # Попытка 1: Загрузка из локального файла
     if os.path.exists(model_path):
         try:
-            logger.info("Loading model from local file...")
+            logger.info("Loading PyTorch model from utils...")
+        
+            # Проверяем что файл модели существует
+            model_path = utils.TRACED_MODEL_PATH
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Model file not found: {model_path}")
             
-            # Дополнительная диагностика
-            file_size = os.path.getsize(model_path)
-            logger.info(f"Local model file size: {file_size} bytes")
-            
-            if file_size == 0:
-                logger.error("Local model file is empty (0 bytes)")
-                raise Exception("Local model file is empty")
-            
-            # Проверяем что файл можно прочитать
-            with open(model_path, 'rb') as f:
-                header = f.read(10)
-                logger.info(f"Local model file header: {header.hex()}")
-            
-            # Пробуем загрузить
-            logger.info("Attempting joblib.load()...")
-            model_data = joblib.load(model_path)
-            logger.info(f"Model data loaded, type: {type(model_data)}")
-            
-            # Проверяем структуру
-            if isinstance(model_data, dict):
-                logger.info(f"Model data keys: {list(model_data.keys())}")
-                if 'model' in model_data:
-                    logger.info(f"Model object type: {type(model_data['model'])}")
-                if 'feature_names' in model_data:
-                    logger.info(f"Feature names count: {len(model_data.get('feature_names', []))}")
-            else:
-                logger.warning(f"Model data is not a dict, type: {type(model_data)}")
-            
-            logger.info("✅ Model loaded successfully from local file")
-            return model_data
+            # Загружаем модель через utils
+            model = utils.load_model()
+            logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
+            return model
             
         except Exception as e:
             logger.error(f"❌ Failed to load local model: {e}")
@@ -384,20 +363,15 @@ def load_model_with_fallback():
     raise Exception("Failed to load model from all sources: local file, Firebase Storage, and HTTP fallback")
 
 # Инициализация модели
-logger.info("=== Starting model initialization ===")
+logger.info("=== Starting PyTorch model initialization ===")
 try:
-    model_data = load_model_with_fallback()
-    model = model_data['model']
-    model = utils.load_model()
-    scaler = model_data.get('scaler', None)
-    feature_names = model_data.get('feature_names', [])
-    logger.info(f"✅ Model initialization completed. Features: {len(feature_names)}")
+    model = load_model_with_fallback()
+    logger.info(f":white_check_mark: Model initialization completed")
     logger.info(f"Model type: {type(model)}")
-    logger.info(f"Scaler present: {scaler is not None}")
 except Exception as e:
-    logger.error(f"❌ Fatal error during model initialization: {e}")
-    logger.info("Setting model, scaler, feature_names to None/empty")
-    model, scaler, feature_names = None, None, []
+    logger.error(f":x: Fatal error during model initialization: {e}")
+    logger.info("Setting model to None")
+    model = None
 logger.info("=== Model initialization complete ===")
 
 # Добавляем дополнительное логирование для Railway
