@@ -1,5 +1,9 @@
 FROM python:3.9-slim
 
+# Set environment variables to force CPU usage
+ENV CUDA_VISIBLE_DEVICES=""
+ENV TORCH_DEVICE="cpu"
+
 # Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
     wget \
