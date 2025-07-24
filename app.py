@@ -388,6 +388,7 @@ logger.info("=== Starting model initialization ===")
 try:
     model_data = load_model_with_fallback()
     model = model_data['model']
+    model = utils.load_model()
     scaler = model_data.get('scaler', None)
     feature_names = model_data.get('feature_names', [])
     logger.info(f"✅ Model initialization completed. Features: {len(feature_names)}")
@@ -481,10 +482,10 @@ def calculate_absorbance_features(measure, reference, dark, cal_data=None):
         return None
 
 def predict_from_json(data):
-    # if model is None:
-    #     return {"error": "Model not loaded. Please restart the service."}, 500
+    if model is None:
+        return {"error": "Model not loaded. Please restart the service."}, 500
     
-    model = utils.load_model()
+    # model = utils.load_model()
 
     if isinstance(data, list):
         data = data[0]
