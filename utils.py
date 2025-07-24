@@ -17,7 +17,8 @@ def load_model():
     print("Model set to evaluation mode (loaded_traced_model.eval()).")
 
     # Move the model to the appropriate device (CPU or GPU)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     loaded_traced_model.to(device)
     print(f"Model moved to device: {device}")
 
@@ -82,7 +83,8 @@ def preprocess_data(measure, reference, dark, cal_data):
     x = np.expand_dims(x, 0)
     print(np.shape(x))
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     x = torch.from_numpy(x)
     x = x.to(device)
 
