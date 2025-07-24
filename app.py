@@ -12,7 +12,6 @@ import sys
 import requests
 import traceback
 # import utils
-import model_loader
 import numpy as np
 import torch
 
