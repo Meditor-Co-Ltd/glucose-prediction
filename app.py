@@ -304,64 +304,26 @@ def download_model_http_fallback():
         return None
 
 def load_model_with_fallback():
-    """Загружает модель: локальный файл → Firebase Storage → HTTP fallback"""
-    model_path = "model.pkl"
-    
-    # Попытка 1: Загрузка из локального файла
-    if os.path.exists(model_path):
-        try:
-            logger.info("Loading PyTorch model from utils...")
-        
-            # Проверяем что файл модели существует
-            model_path = utils.TRACED_MODEL_PATH
-            if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Model file not found: {model_path}")
-            
-            # Загружаем модель через utils
-            model = utils.load_model()
-            logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
-            return model
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to load local model: {e}")
-            logger.error(f"Exception type: {type(e)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            logger.info("Trying to download from Firebase...")
-    else:
-        logger.info("Local model not found, downloading from Firebase...")
-    
-    # Проверяем флаг принудительного HTTP fallback
-    force_http = os.environ.get('FORCE_HTTP_FALLBACK', '').lower() in ['true', '1', 'yes']
-    
-    if force_http:
-        logger.info("🔄 FORCE_HTTP_FALLBACK is enabled, skipping Firebase...")
-    else:
-        # Попытка 2: Firebase Storage
-        if initialize_firebase():
-            try:
-                model_data = download_model_from_firebase()
-                logger.info("✅ Model downloaded and loaded successfully from Firebase Storage")
-                return model_data
-            except Exception as e:
-                logger.error(f"❌ Firebase Storage download failed: {e}")
-                logger.info("Trying HTTP fallback...")
-        else:
-            logger.error("❌ Firebase initialization failed, trying HTTP fallback...")
-    
-    # Попытка 3: HTTP fallback
+    """Загружает PyTorch модель через utils.py"""
     try:
-        model_data = download_model_http_fallback()
-        if model_data:
-            logger.info("✅ Model loaded successfully via HTTP fallback")
-            return model_data
-        else:
-            logger.error("❌ HTTP fallback also failed")
+        logger.info("Loading PyTorch model from utils...")
+        
+        # Проверяем что файл модели существует
+        model_path = utils.TRACED_MODEL_PATH
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        
+        # Загружаем модель через utils
+        model = utils.load_model()
+        logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
+        return model
+        
     except Exception as e:
-        logger.error(f"❌ HTTP fallback failed: {e}")
+        logger.error(f":x: Failed to load PyTorch model: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise Exception(f"Failed to load PyTorch model: {e}")
     
-    # Если все попытки провалились
-    raise Exception("Failed to load model from all sources: local file, Firebase Storage, and HTTP fallback")
-
+    
 # Инициализация модели
 logger.info("=== Starting PyTorch model initialization ===")
 try:
