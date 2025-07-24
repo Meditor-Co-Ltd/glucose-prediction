@@ -85,7 +85,7 @@ def preprocess_data(measure, reference, dark, cal_data):
 
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
-    x = torch.from_numpy(x)
+    x = torch.from_numpy(x).double()
     x = x.to(device)
 
     return x
