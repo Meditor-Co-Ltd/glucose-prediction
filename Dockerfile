@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем код приложения
 COPY app.py .
+COPY cnn_model_traced.pt .
+COPY utils.py .
+
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "
