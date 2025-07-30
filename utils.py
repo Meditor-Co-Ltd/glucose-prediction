@@ -4,9 +4,10 @@ import numpy as np
 # import pandas as pd
 # import ast
 import torch
+import pickle
 
 # --- Loading the traced model ---
-TRACED_MODEL_PATH = 'cnn_model_traced.pt' # Must be the same path
+TRACED_MODEL_PATH = 'cnn_model_traced2.pt' # Must be the same path
 
 def load_model():
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH)
@@ -65,6 +66,12 @@ def normalize_1d(x):
     return x_normalized
 
 
+def normalize_inputs(x):
+    with open("calibration_value.pkl", 'r') as f:
+        avg = pickle.load(f)
+    normalized_x = (x - avg) / avg
+    return normalized_x
+
 def preprocess_data(measure, reference, dark, cal_data):
 
     # measure = ast.literal_eval(raw_data['measure'])
@@ -78,6 +85,7 @@ def preprocess_data(measure, reference, dark, cal_data):
 
     # Convert to NumPy arrays
     x = np.array(feature_vector)
+    x = normalize_inputs(x)
     print(np.shape(x))
     # y = np.array(glucose_values)
     x = np.expand_dims(x, 0)
