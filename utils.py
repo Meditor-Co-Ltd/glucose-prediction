@@ -67,7 +67,7 @@ def normalize_1d(x):
 
 
 def normalize_inputs(x):
-    with open("calibration_value.pkl", 'r') as f:
+    with open("calibration_value.pkl", 'rb') as f:
         avg = pickle.load(f)
     normalized_x = (x - avg) / avg
     return normalized_x
