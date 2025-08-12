@@ -7,7 +7,7 @@ import torch
 import pickle
 
 # --- Loading the traced model ---
-TRACED_MODEL_PATH = 'cnn_model_traced2.pt' # Must be the same path
+TRACED_MODEL_PATH = 'cnn_model_traced_20250806.pt' # Must be the same path
 
 def load_model():
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH)
@@ -72,6 +72,24 @@ def normalize_inputs(x):
     normalized_x = (x - avg) / avg
     return normalized_x
 
+
+def normalize_inputs2(x):
+        
+    with open("average50.pkl", 'rb') as f:
+        avg50 = pickle.load(f)
+    with open("average0.pkl", 'rb') as f:
+        avg0 = pickle.load(f)
+    with open("average100.pkl", 'rb') as f:
+        avg100 = pickle.load(f)
+
+    normalized_x0 = (x - avg0) / avg100
+    normalized_x50 = (x - avg50) / avg50
+    normalized_x100 = (x - avg100) / avg100
+    normalized_stacked_x = np.hstack((normalized_x0, normalized_x50, normalized_x100))
+
+    return normalized_stacked_x
+
+
 def preprocess_data(measure, reference, dark, cal_data):
 
     # measure = ast.literal_eval(raw_data['measure'])
@@ -85,7 +103,8 @@ def preprocess_data(measure, reference, dark, cal_data):
 
     # Convert to NumPy arrays
     x = np.array(feature_vector)
-    x = normalize_inputs(x)
+    # x = normalize_inputs(x)
+    x = normalize_inputs2(x)
     print(np.shape(x))
     # y = np.array(glucose_values)
     x = np.expand_dims(x, 0)
@@ -98,6 +117,7 @@ def preprocess_data(measure, reference, dark, cal_data):
 
     return x
 
+
 def model_inference(model, x):
     
     with torch.no_grad():
@@ -109,7 +129,7 @@ def model_inference(model, x):
 def rescale_prediction(y):
     # input_min = 0.0
     # input_max = 1.0
-    output_min = 60.0
-    output_max = 240.0
+    output_min = 49.0
+    output_max = 235.0
 
     return y * (output_max-output_min) + output_min
