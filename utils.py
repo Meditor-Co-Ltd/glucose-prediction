@@ -104,10 +104,13 @@ def preprocess_data(measure, reference, dark, cal_data):
     # Convert to NumPy arrays
     x = np.array(feature_vector)
     # x = normalize_inputs(x)
-    x = normalize_inputs2(x)
-    print(np.shape(x))
-    # y = np.array(glucose_values)
+    # print(np.shape(x))
+    # # y = np.array(glucose_values)
+    # x = np.expand_dims(x, 0)
+    # print(np.shape(x))
+
     x = np.expand_dims(x, 0)
+    x = normalize_inputs2(x)
     print(np.shape(x))
 
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
