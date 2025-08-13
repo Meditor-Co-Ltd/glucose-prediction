@@ -21,10 +21,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем код приложения
 COPY app.py .
 COPY utils.py .
-COPY cnn_model_traced_20250806.pt .
-COPY average0_20250806.pkl .
-COPY average50_20250806.pkl .
-COPY average100_20250806.pkl .
+COPY cnn_model_traced_20250813.pt .
+COPY average0_20250813.pkl .
+COPY average50_20250813.pkl .
+COPY average100_20250813.pkl .
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "
