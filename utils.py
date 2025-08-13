@@ -75,10 +75,10 @@ def normalize_inputs(x):
 
 def normalize_inputs2(x):
         
-    with open("average50_20250813.pkl", 'rb') as f:
-        avg50 = pickle.load(f)
     with open("average0_20250813.pkl", 'rb') as f:
         avg0 = pickle.load(f)
+    with open("average50_20250813.pkl", 'rb') as f:
+        avg50 = pickle.load(f)
     with open("average100_20250813.pkl", 'rb') as f:
         avg100 = pickle.load(f)
 
