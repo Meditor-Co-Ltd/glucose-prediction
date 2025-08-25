@@ -7,7 +7,7 @@ import torch
 import pickle
 
 # --- Loading the traced model ---
-TRACED_MODEL_PATH = 'cnn_model_traced_20250813.pt' # Must be the same path
+TRACED_MODEL_PATH = 'probablistic_model_traced.pt' # Must be the same path
 
 def load_model():
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH)
@@ -75,17 +75,21 @@ def normalize_inputs(x):
 
 def normalize_inputs2(x):
         
-    with open("average0_20250813.pkl", 'rb') as f:
+    with open("average.pkl", 'rb') as f:
+        avg = pickle.load(f)
+    with open("average0.pkl", 'rb') as f:
         avg0 = pickle.load(f)
-    with open("average50_20250813.pkl", 'rb') as f:
+    with open("average50.pkl", 'rb') as f:
         avg50 = pickle.load(f)
-    with open("average100_20250813.pkl", 'rb') as f:
+    with open("average100.pkl", 'rb') as f:
         avg100 = pickle.load(f)
 
+    normalized_x = (x - avg) / avg
     normalized_x0 = (x - avg0) / avg0
     normalized_x50 = (x - avg50) / avg50
     normalized_x100 = (x - avg100) / avg100
-    normalized_stacked_x = np.hstack((normalized_x0, normalized_x50, normalized_x100))
+    normalized_stacked_x = np.hstack((normalized_x, normalized_x0, normalized_x50, normalized_x100))
+    # normalized_stacked_x = np.hstack((normalized_x0, normalized_x50, normalized_x100))
 
     return normalized_stacked_x
 

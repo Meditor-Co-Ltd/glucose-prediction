@@ -92,11 +92,12 @@ def predict_from_json(data):
         
         # Инференс модели
         logger.info("Running model inference...")
-        prediction = utils.model_inference(model, x)
+        # prediction = utils.model_inference(model, x)
         
-        # Масштабирование предсказания
-        logger.info("Rescaling prediction...")
-        prediction_rescaled = utils.rescale_prediction(prediction)
+        # # Масштабирование предсказания
+        # logger.info("Rescaling prediction...")
+        # prediction_rescaled = utils.rescale_prediction(prediction)
+        prediction_rescaled, _ = utils.model_inference(model, x)
         
         # Конвертируем tensor в число
         if hasattr(prediction_rescaled, 'item'):
