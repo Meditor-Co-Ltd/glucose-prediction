@@ -97,17 +97,21 @@ def predict_from_json(data):
         # # Масштабирование предсказания
         # logger.info("Rescaling prediction...")
         # prediction_rescaled = utils.rescale_prediction(prediction)
-        prediction_rescaled, _ = utils.model_inference(model, x)
+        prediction_rescaled, sigma = utils.model_inference(model, x)
         
         # Конвертируем tensor в число
         if hasattr(prediction_rescaled, 'item'):
             prediction_value = prediction_rescaled.item()
         else:
             prediction_value = float(prediction_rescaled)
+        if hasattr(sigma, 'item'):
+            sigma_value = sigma.item()
+        else:
+            sigma_value = float(sigma)
         
         logger.info(f"Prediction completed: {prediction_value}")
         
-        return {"predicted_glucose": round(prediction_value, 2)}
+        return {"predicted_glucose": round(prediction_value, 2), "sigma": round(sigma_value, 2)}
         
     except Exception as e:
         logger.error(f"Error in prediction: {e}")
