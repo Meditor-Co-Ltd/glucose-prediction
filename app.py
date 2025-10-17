@@ -111,7 +111,9 @@ def predict_from_json(data):
         
         logger.info(f"Prediction completed: {prediction_value}")
         
-        return {"predicted_glucose": round(prediction_value, 2), "sigma": round(sigma_value, 2)}
+        acceptance_value = 0.01*prediction_value+3.422+0.2
+
+        return {"predicted_glucose": round(prediction_value, 2), "sigma": round(sigma_value, 2), "acceptance": round(acceptance_value, 2)}
         
     except Exception as e:
         logger.error(f"Error in prediction: {e}")
