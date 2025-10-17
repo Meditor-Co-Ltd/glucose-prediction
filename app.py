@@ -111,7 +111,7 @@ def predict_from_json(data):
         
         logger.info(f"Prediction completed: {prediction_value}")
         
-        acceptance_value = 0.01*prediction_value+3.422+0.2
+        acceptance_value = 0.011*prediction_value+3.224+0.1
 
         return {"predicted_glucose": round(prediction_value, 2), "sigma": round(sigma_value, 2), "acceptance": round(acceptance_value, 2)}
         
