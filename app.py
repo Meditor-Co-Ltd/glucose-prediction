@@ -131,8 +131,12 @@ def predict_from_json(data):
             sigma_value = float(sigma)
         
         logger.info(f"Prediction completed: {prediction_value}")
-        
-        acceptance_value = 0.011*prediction_value+3.224+0.1
+        if baseline < 100:
+            acceptance_value = 0.003*prediction_value+4.540
+        elif baseline >= 100 and baseline < 125:
+            acceptance_value = 0.013*prediction_value+2.899
+        else:
+            acceptance_value = 0.018*prediction_value+1.981
 
         return {"predicted_glucose": round(prediction_value, 2), "sigma": round(sigma_value, 2), "acceptance": round(acceptance_value, 2)}
         
