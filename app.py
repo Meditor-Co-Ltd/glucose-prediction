@@ -97,9 +97,17 @@ def predict_from_json(data):
         reference = np.array(data.get("reference", []))
         dark = np.array(data.get("dark", []))
         cal_data = np.array(data.get("cal_data", []))
-        baseline = data.get("baseline")
-        diabetes = data.get("diabetes")
-        
+        try:
+            baseline = data.get("baseline")
+        except:
+            baseline = 90
+        try:
+            diabetes = data.get("diabetes")
+        except:
+            diabetes = 0
+        if diabetes == 1 and baseline < 125:
+            baseline = 125
+
         # Проверяем что все массивы не пустые
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
