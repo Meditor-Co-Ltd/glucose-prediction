@@ -36,21 +36,21 @@ def load_model_with_fallback():
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
         # Загружаем модель через utils
-        NORMAL_model = utils.load_model()
+        NORMAL_model = utils.load_model(model_path)
         logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
         # Проверяем что файл модели существует
         model_path = utils.PREDIABETIC_TRACED_MODEL_PATH
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
         # Загружаем модель через utils
-        PREDIABETIC_model = utils.load_model()
+        PREDIABETIC_model = utils.load_model(model_path)
         logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
         # Проверяем что файл модели существует
         model_path = utils.DIABETIC_TRACED_MODEL_PATH
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
         # Загружаем модель через utils
-        DIABETIC_model = utils.load_model()
+        DIABETIC_model = utils.load_model(model_path)
         logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
 
         return NORMAL_model, PREDIABETIC_model, DIABETIC_model
@@ -69,7 +69,9 @@ try:
 except Exception as e:
     logger.error(f":x: Fatal error during model initialization: {e}")
     logger.info("Setting model to None")
-    model = None
+    NORMAL_model = None
+    PREDIABETIC_model = None
+    DIABETIC_model = None
 logger.info("=== Model initialization complete ===")
 
 # Добавляем дополнительное логирование для Railway
@@ -148,13 +150,13 @@ def predict_from_json(data):
 @app.route('/', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    status = "healthy" if model is not None else "unhealthy"
+    status = "healthy" if NORMAL_model is not None else "unhealthy"
     
     # Диагностическая информация
     diagnostics = {
-        "model_file_exists": os.path.exists(utils.TRACED_MODEL_PATH),
-        "model_file_path": utils.TRACED_MODEL_PATH,
-        "model_loaded": model is not None,
+        "model_file_exists": os.path.exists(utils.NORMAL_TRACED_MODEL_PATH),
+        "model_file_path": utils.NORMAL_TRACED_MODEL_PATH,
+        "model_loaded": NORMAL_model is not None,
         "working_directory": os.getcwd(),
         "environment": {
             "PORT": os.environ.get('PORT', 'not_set'),
@@ -164,16 +166,16 @@ def health_check():
     }
     
     # Проверяем размер файла модели
-    if os.path.exists(utils.TRACED_MODEL_PATH):
-        diagnostics["model_file_size"] = os.path.getsize(utils.TRACED_MODEL_PATH)
+    if os.path.exists(utils.NORMAL_TRACED_MODEL_PATH):
+        diagnostics["model_file_size"] = os.path.getsize(utils.NORMAL_TRACED_MODEL_PATH)
     
     # Логируем результат health check
-    logger.info(f"Health check: status={status}, model_loaded={model is not None}")
+    logger.info(f"Health check: status={status}, model_loaded={NORMAL_model is not None}")
     
     response = {
         "status": status, 
         "message": "Glucose prediction API is running (PyTorch version)",
-        "model_loaded": model is not None,
+        "model_loaded": NORMAL_model is not None,
         "model_type": "PyTorch CNN",
         "diagnostics": diagnostics
     }
@@ -181,9 +183,9 @@ def health_check():
     # Если что-то не так, добавляем детали
     if status == "unhealthy":
         error_details = []
-        if not os.path.exists(utils.TRACED_MODEL_PATH):
-            error_details.append(f"Model file not found: {utils.TRACED_MODEL_PATH}")
-        if not model:
+        if not os.path.exists(utils.NORMAL_TRACED_MODEL_PATH):
+            error_details.append(f"Model file not found: {utils.NORMAL_TRACED_MODEL_PATH}")
+        if not NORMAL_model:
             error_details.append("Model failed to load - check model file and PyTorch installation")
         response["error_details"] = error_details
     
@@ -193,7 +195,7 @@ def health_check():
 def debug_model():
     """Диагностика PyTorch модели"""
     try:
-        model_path = utils.TRACED_MODEL_PATH
+        model_path = utils.NORMAL_TRACED_MODEL_PATH
         
         result = {
             "file_exists": os.path.exists(model_path),
@@ -249,7 +251,7 @@ def debug_model():
 def predict():
     """Main prediction endpoint"""
     try:
-        if model is None:
+        if NORMAL_model is None or PREDIABETIC_model is None or DIABETIC_model is None:
             return jsonify({"error": "Model not loaded. Please restart the service."}), 503
         
         data = request.get_json()
