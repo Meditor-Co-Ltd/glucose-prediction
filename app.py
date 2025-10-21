@@ -32,14 +32,28 @@ def load_model_with_fallback():
         logger.info("Loading PyTorch model from utils...")
         
         # Проверяем что файл модели существует
-        model_path = utils.TRACED_MODEL_PATH
+        model_path = utils.NORMAL_TRACED_MODEL_PATH
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
-        
         # Загружаем модель через utils
-        model = utils.load_model()
+        NORMAL_model = utils.load_model()
         logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
-        return model
+        # Проверяем что файл модели существует
+        model_path = utils.PREDIABETIC_TRACED_MODEL_PATH
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        # Загружаем модель через utils
+        PREDIABETIC_model = utils.load_model()
+        logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
+        # Проверяем что файл модели существует
+        model_path = utils.DIABETIC_TRACED_MODEL_PATH
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        # Загружаем модель через utils
+        DIABETIC_model = utils.load_model()
+        logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
+
+        return NORMAL_model, PREDIABETIC_model, DIABETIC_model
         
     except Exception as e:
         logger.error(f":x: Failed to load PyTorch model: {e}")
@@ -49,9 +63,9 @@ def load_model_with_fallback():
 # Инициализация модели
 logger.info("=== Starting PyTorch model initialization ===")
 try:
-    model = load_model_with_fallback()
+    NORMAL_model, PREDIABETIC_model, DIABETIC_model = load_model_with_fallback()
     logger.info(f":white_check_mark: Model initialization completed")
-    logger.info(f"Model type: {type(model)}")
+    logger.info(f"Model type: {type(NORMAL_model)}")
 except Exception as e:
     logger.error(f":x: Fatal error during model initialization: {e}")
     logger.info("Setting model to None")
@@ -63,12 +77,12 @@ logger.info("=== Environment Information ===")
 logger.info(f"Python version: {sys.version}")
 logger.info(f"Current working directory: {os.getcwd()}")
 logger.info(f"PORT environment variable: {os.environ.get('PORT', 'not set')}")
-logger.info(f"Model file exists: {os.path.exists(utils.TRACED_MODEL_PATH)}")
+logger.info(f"Model file exists: {os.path.exists(utils.NORMAL_TRACED_MODEL_PATH)}")
 logger.info("=== Environment Information Complete ===")
 
 def predict_from_json(data):
     """Предсказание с использованием PyTorch модели"""
-    if model is None:
+    if NORMAL_model is None or PREDIABETIC_model is None or DIABETIC_model is None:
         return {"error": "Model not loaded. Please restart the service."}, 500
     
     try:
@@ -81,6 +95,8 @@ def predict_from_json(data):
         reference = np.array(data.get("reference", []))
         dark = np.array(data.get("dark", []))
         cal_data = np.array(data.get("cal_data", []))
+        baseline = data.get("baseline")
+        diabetes = data.get("diabetes")
         
         # Проверяем что все массивы не пустые
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
@@ -88,7 +104,7 @@ def predict_from_json(data):
         
         # Препроцессинг данных
         logger.info("Preprocessing data...")
-        x = utils.preprocess_data(measure, reference, dark, cal_data)
+        x = utils.preprocess_data(measure, reference, dark, cal_data, baseline)
         
         # Инференс модели
         logger.info("Running model inference...")
@@ -97,7 +113,12 @@ def predict_from_json(data):
         # # Масштабирование предсказания
         # logger.info("Rescaling prediction...")
         # prediction_rescaled = utils.rescale_prediction(prediction)
-        prediction_rescaled, sigma = utils.model_inference(model, x)
+        if baseline < 100:
+            prediction_rescaled, sigma = utils.model_inference(NORMAL_model, x)
+        elif baseline >= 100 and baseline < 125:
+            prediction_rescaled, sigma = utils.model_inference(PREDIABETIC_model, x)
+        else:
+            prediction_rescaled, sigma = utils.model_inference(DIABETIC_model, x)
         
         # Конвертируем tensor в число
         if hasattr(prediction_rescaled, 'item'):

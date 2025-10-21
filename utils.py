@@ -7,9 +7,11 @@ import torch
 import pickle
 
 # --- Loading the traced model ---
-TRACED_MODEL_PATH = 'probablistic_model_traced.pt' # Must be the same path
+NORMAL_TRACED_MODEL_PATH = 'probablistic_model_NORMAL_traced.pt' # Must be the same path
+PREDIABETIC_TRACED_MODEL_PATH = 'probablistic_model_PREDIABETIC_traced.pt'
+DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
 
-def load_model():
+def load_model(TRACED_MODEL_PATH):
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH)
     print(f"Traced model successfully loaded from {TRACED_MODEL_PATH}")
 
@@ -73,16 +75,35 @@ def normalize_inputs(x):
     return normalized_x
 
 
-def normalize_inputs2(x):
-        
-    with open("average.pkl", 'rb') as f:
-        avg = pickle.load(f)
-    with open("average0.pkl", 'rb') as f:
-        avg0 = pickle.load(f)
-    with open("average50.pkl", 'rb') as f:
-        avg50 = pickle.load(f)
-    with open("average100.pkl", 'rb') as f:
-        avg100 = pickle.load(f)
+def normalize_inputs2(x, baseline):
+    
+    if baseline < 100:
+        with open("NORMAL_average.pkl", 'rb') as f:
+            avg = pickle.load(f)
+        with open("NORMAL_average0.pkl", 'rb') as f:
+            avg0 = pickle.load(f)
+        with open("NORMAL_average50.pkl", 'rb') as f:
+            avg50 = pickle.load(f)
+        with open("NORMAL_average100.pkl", 'rb') as f:
+            avg100 = pickle.load(f)
+    elif baseline >= 100 and baseline < 125:
+        with open("PREDIABETIC_average.pkl", 'rb') as f:
+            avg = pickle.load(f)
+        with open("PREDIABETIC_average0.pkl", 'rb') as f:
+            avg0 = pickle.load(f)
+        with open("PREDIABETIC_average50.pkl", 'rb') as f:
+            avg50 = pickle.load(f)
+        with open("PREDIABETIC_average100.pkl", 'rb') as f:
+            avg100 = pickle.load(f)
+    else:
+        with open("DIABETIC_average.pkl", 'rb') as f:
+            avg = pickle.load(f)
+        with open("DIABETIC_average0.pkl", 'rb') as f:
+            avg0 = pickle.load(f)
+        with open("DIABETIC_average50.pkl", 'rb') as f:
+            avg50 = pickle.load(f)
+        with open("DIABETIC_average100.pkl", 'rb') as f:
+            avg100 = pickle.load(f)
 
     normalized_x = (x - avg) / avg
     normalized_x0 = (x - avg0) / avg0
@@ -94,7 +115,7 @@ def normalize_inputs2(x):
     return normalized_stacked_x
 
 
-def preprocess_data(measure, reference, dark, cal_data):
+def preprocess_data(measure, reference, dark, cal_data, baseline):
 
     # measure = ast.literal_eval(raw_data['measure'])
     # cal_data = ast.literal_eval(raw_data['cal_data'])
@@ -114,7 +135,7 @@ def preprocess_data(measure, reference, dark, cal_data):
     # print(np.shape(x))
 
     x = np.expand_dims(x, 0)
-    x = normalize_inputs2(x)
+    x = normalize_inputs2(x, baseline)
     print(np.shape(x))
 
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
