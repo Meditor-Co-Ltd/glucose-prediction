@@ -100,11 +100,11 @@ def predict_from_json(data):
 
         baseline = data.get("baseline")
         if baseline is None:
-        baseline = 90
+            baseline = 90
 
         diabetes = data.get("diabetes")
         if diabetes is None:
-        diabetes = 0
+            diabetes = 0
         
         try:
             baseline = data.get("baseline")
