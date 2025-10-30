@@ -99,11 +99,11 @@ def predict_from_json(data):
         cal_data = np.array(data.get("cal_data", []))
 
         baseline = data.get("baseline")
-        if baseline is None:
+        if not isinstance(baseline, (int, float)) or baseline is None:
             baseline = 90
 
         diabetes = data.get("diabetes")
-        if diabetes is None:
+        if not isinstance(diabetes, (int, float)) or diabetes is None:
             diabetes = 0
         
         try:
