@@ -116,9 +116,9 @@ def predict_from_json(data):
             except ValueError:
                 diabetes = 0
 
-    # Корректировка baseline для диабетиков
-    if diabetes == 1 and baseline < 125:
-        baseline = 125
+        # Корректировка baseline для диабетиков
+        if diabetes == 1 and baseline < 125:
+            baseline = 125
 
         # Проверяем что все массивы не пустые
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
