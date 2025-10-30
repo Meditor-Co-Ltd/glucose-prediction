@@ -98,24 +98,27 @@ def predict_from_json(data):
         dark = np.array(data.get("dark", []))
         cal_data = np.array(data.get("cal_data", []))
 
-        baseline = data.get("baseline")
-        if not isinstance(baseline, (int, float)) or baseline is None:
+        baseline = data.get("baseline", 90)
+        if baseline in [None, "None", "null", ""]:
             baseline = 90
+        else:
+            try:
+                baseline = float(baseline)
+            except ValueError:
+                baseline = 90
 
-        diabetes = data.get("diabetes")
-        if not isinstance(diabetes, (int, float)) or diabetes is None:
+        diabetes = data.get("diabetes", 0)
+        if diabetes in [None, "None", "null", ""]:
             diabetes = 0
-        
-        try:
-            baseline = data.get("baseline")
-        except:
-            baseline = 90
-        try:
-            diabetes = data.get("diabetes")
-        except:
-            diabetes = 0
-        if diabetes == 1 and baseline < 125:
-            baseline = 125
+        else:
+            try:
+                diabetes = int(diabetes)
+            except ValueError:
+                diabetes = 0
+
+    # Корректировка baseline для диабетиков
+    if diabetes == 1 and baseline < 125:
+        baseline = 125
 
         # Проверяем что все массивы не пустые
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
