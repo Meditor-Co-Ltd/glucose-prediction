@@ -160,6 +160,7 @@ def predict_from_json(data):
         else:
             sigma_value = float(sigma)
         
+        logger.info(f"baseline value: {baseline}")
         logger.info(f"Regression prediction: {prediction_value}")
         if baseline < 100:
             acceptance_value = 0.003*prediction_value+4.540
@@ -179,10 +180,11 @@ def predict_from_json(data):
             # Mask out classes below baseline
             # Class 0 = 65, Class 1 = 75, etc. So baseline 90 means we start from class 3 (95)
             min_class = max(0, int(np.ceil((baseline - 65) / 10)))
-
+            logger.info(f"min class: {min_class}")
             # Create a masked array: set logits below min_class to -inf
             masked_logits = prediction_array.copy()
             masked_logits[:min_class] = -np.inf
+            print(masked_logits)
 
             predicted_class = int(np.argmax(masked_logits))
             prediction_value = float(65 + predicted_class*10)
