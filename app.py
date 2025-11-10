@@ -177,6 +177,9 @@ def predict_from_json(data):
 
         # If it's a vector of logits or probabilities:
         if prediction_array.ndim > 0 and prediction_array.size > 1:
+            # Flatten to 1D if needed
+            prediction_array = prediction_array.flatten()
+
             # Mask out classes below baseline
             # Class 0 = 65, Class 1 = 75, etc. So baseline 90 means we start from class 3 (95)
             min_class = max(0, int(np.ceil((baseline - 65) / 10)))
