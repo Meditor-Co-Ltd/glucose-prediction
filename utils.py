@@ -10,6 +10,7 @@ import pickle
 NORMAL_TRACED_MODEL_PATH = 'probablistic_model_NORMAL_traced.pt' # Must be the same path
 PREDIABETIC_TRACED_MODEL_PATH = 'probablistic_model_PREDIABETIC_traced.pt'
 DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
+CLASSIFICATION_TRACED_MODEL_PATH = 'classification_model_binwidth10.pt'
 
 def load_model(TRACED_MODEL_PATH):
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH)
@@ -135,6 +136,7 @@ def preprocess_data(measure, reference, dark, cal_data, baseline):
     # print(np.shape(x))
 
     x = np.expand_dims(x, 0)
+    x_original = x
     x = normalize_inputs2(x, baseline)
     print(np.shape(x))
 
@@ -142,8 +144,10 @@ def preprocess_data(measure, reference, dark, cal_data, baseline):
     device = torch.device("cpu")
     x = torch.from_numpy(x).double()
     x = x.to(device)
+    x_original = torch.from_numpy(x_original).double()
+    x_original = x_original.to(device)
 
-    return x
+    return x, x_original
 
 
 def model_inference(model, x):

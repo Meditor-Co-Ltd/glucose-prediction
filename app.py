@@ -52,8 +52,15 @@ def load_model_with_fallback():
         # Загружаем модель через utils
         DIABETIC_model = utils.load_model(model_path)
         logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
+        
+        model_path = utils.CLASSIFICATION_TRACED_MODEL_PATH
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        # Загружаем модель через utils
+        CLASSIFICATION_model = utils.load_model(model_path)
+        logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
 
-        return NORMAL_model, PREDIABETIC_model, DIABETIC_model
+        return NORMAL_model, PREDIABETIC_model, DIABETIC_model, CLASSIFICATION_model
         
     except Exception as e:
         logger.error(f":x: Failed to load PyTorch model: {e}")
@@ -63,7 +70,7 @@ def load_model_with_fallback():
 # Инициализация модели
 logger.info("=== Starting PyTorch model initialization ===")
 try:
-    NORMAL_model, PREDIABETIC_model, DIABETIC_model = load_model_with_fallback()
+    NORMAL_model, PREDIABETIC_model, DIABETIC_model, CLASSIFICATION_model = load_model_with_fallback()
     logger.info(f":white_check_mark: Model initialization completed")
     logger.info(f"Model type: {type(NORMAL_model)}")
 except Exception as e:
@@ -72,6 +79,7 @@ except Exception as e:
     NORMAL_model = None
     PREDIABETIC_model = None
     DIABETIC_model = None
+    CLASSIFICATION_model = None
 logger.info("=== Model initialization complete ===")
 
 # Добавляем дополнительное логирование для Railway
@@ -84,7 +92,7 @@ logger.info("=== Environment Information Complete ===")
 
 def predict_from_json(data):
     """Предсказание с использованием PyTorch модели"""
-    if NORMAL_model is None or PREDIABETIC_model is None or DIABETIC_model is None:
+    if NORMAL_model is None or PREDIABETIC_model is None or DIABETIC_model is None or CLASSIFICATION_model is None:
         return {"error": "Model not loaded. Please restart the service."}, 500
     
     try:
@@ -114,7 +122,7 @@ def predict_from_json(data):
         
         # Препроцессинг данных
         logger.info("Preprocessing data...")
-        x = utils.preprocess_data(measure, reference, dark, cal_data, baseline)
+        x, x_original = utils.preprocess_data(measure, reference, dark, cal_data, baseline)
         
         # Инференс модели
         logger.info("Running model inference...")
@@ -147,6 +155,21 @@ def predict_from_json(data):
             acceptance_value = 0.013*prediction_value+2.899
         else:
             acceptance_value = 0.018*prediction_value+1.981
+
+        prediction_rescaled = utils.model_inference(CLASSIFICATION_model, x_original)
+        print(prediction_rescaled)
+        prediction_array = np.array(prediction_rescaled, dtype=float)
+        print(np.shape(prediction_array))
+        print(prediction_array)
+
+        # If it's a vector of logits or probabilities:
+        if prediction_array.ndim > 0 and prediction_array.size > 1:
+            predicted_class = np.argmax(prediction_array)
+            prediction_value = 65 + predicted_class*10
+        print(predicted_class)
+        print(prediction_value)
+        sigma_value = 0
+        acceptance_value = 1
 
         return {"predicted_glucose": round(prediction_value, 2), "sigma": round(sigma_value, 2), "acceptance": round(acceptance_value, 2)}
         
