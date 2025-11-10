@@ -176,8 +176,8 @@ def predict_from_json(data):
 
         # If it's a vector of logits or probabilities:
         if prediction_array.ndim > 0 and prediction_array.size > 1:
-            predicted_class = np.argmax(prediction_array)
-            prediction_value = 65 + predicted_class*10
+            predicted_class = int(np.argmax(prediction_array))
+            prediction_value = float(65 + predicted_class*10)
         print(predicted_class)
         print(prediction_value)
         sigma_value = 0
