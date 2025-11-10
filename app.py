@@ -105,14 +105,26 @@ def predict_from_json(data):
         reference = np.array(data.get("reference", []))
         dark = np.array(data.get("dark", []))
         cal_data = np.array(data.get("cal_data", []))
-        try:
-            baseline = data.get("baseline")
-        except:
+
+        baseline = data.get("baseline", 90)
+        if baseline in [None, "None", "null", ""]:
             baseline = 90
-        try:
-            diabetes = data.get("diabetes")
-        except:
+        else:
+            try:
+                baseline = float(baseline)
+            except ValueError:
+                baseline = 90
+
+        diabetes = data.get("diabetes", 0)
+        if diabetes in [None, "None", "null", ""]:
             diabetes = 0
+        else:
+            try:
+                diabetes = int(diabetes)
+            except ValueError:
+                diabetes = 0
+
+        # Корректировка baseline для диабетиков
         if diabetes == 1 and baseline < 125:
             baseline = 125
 
