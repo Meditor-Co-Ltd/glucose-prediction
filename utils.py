@@ -13,7 +13,7 @@ DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
 CLASSIFICATION_TRACED_MODEL_PATH = 'classification_model_binwidth10.pt'
 
 def load_model(TRACED_MODEL_PATH):
-    loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH)
+    loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH, map_location='cpu')
     print(f"Traced model successfully loaded from {TRACED_MODEL_PATH}")
 
     # Set to evaluation mode (important for inference, even for traced models)
