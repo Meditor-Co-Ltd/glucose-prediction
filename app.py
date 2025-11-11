@@ -183,14 +183,27 @@ def predict_from_json(data):
             # Mask out classes below baseline
             # Class 0 = 65, Class 1 = 75, etc. So baseline 90 means we start from class 3 (95)
             min_class = max(0, int(np.ceil((baseline - 65) / 10)))
+            min_class = max(0, int(np.floor((baseline - 65) / 10)))
             logger.info(f"min class: {min_class}")
             # Create a masked array: set logits below min_class to -inf
             masked_logits = prediction_array.copy()
             masked_logits[:min_class] = -np.inf
             print(masked_logits)
+            
+            # predicted_class = int(np.argmax(masked_logits))
 
-            predicted_class = int(np.argmax(masked_logits))
+            # Softmax will give 0 probability to -inf logits
+            logits_shifted = masked_logits - np.max(masked_logits)
+            exp_logits = np.exp(logits_shifted)
+            probs = exp_logits / np.sum(exp_logits)
+            
+            # Compute expectation over feasible classes only
+            class_indices = np.arange(15, dtype=float)
+            # Compute expected class index (weighted average)
+            predicted_class = np.sum(probs * class_indices)
+
             prediction_value = float(65 + predicted_class*10)
+            
         print(predicted_class)
         print(prediction_value)
         sigma_value = 0
