@@ -137,6 +137,7 @@ def preprocess_data(measure, reference, dark, cal_data, baseline):
 
     x = np.expand_dims(x, 0)
     x_original = x
+    x_original = normalize_1d(x_original)
     x = normalize_inputs2(x, baseline)
     print(np.shape(x))
 
