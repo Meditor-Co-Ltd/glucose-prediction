@@ -53,14 +53,28 @@ def load_model_with_fallback():
         DIABETIC_model = utils.load_model(model_path)
         logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
         
-        model_path = utils.CLASSIFICATION_TRACED_MODEL_PATH
+        model_path = utils.NORMAL_CLASSIFICATION_MODEL_PATH
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
         # Загружаем модель через utils
-        CLASSIFICATION_model = utils.load_model(model_path)
+        NORMAL_CLASSIFICATION_model = utils.load_model(model_path)
         logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
 
-        return NORMAL_model, PREDIABETIC_model, DIABETIC_model, CLASSIFICATION_model
+        model_path = utils.PREDIABETIC_CLASSIFICATION_MODEL_PATH
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        # Загружаем модель через utils
+        PREDIABETIC_CLASSIFICATION_model = utils.load_model(model_path)
+        logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
+
+        model_path = utils.DIABETIC_CLASSIFICATION_MODEL_PATH
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        # Загружаем модель через utils
+        DIABETIC_CLASSIFICATION_model = utils.load_model(model_path)
+        logger.info(f":white_check_mark: PyTorch model loaded successfully from {model_path}")
+
+        return NORMAL_model, PREDIABETIC_model, DIABETIC_model, NORMAL_CLASSIFICATION_model, PREDIABETIC_CLASSIFICATION_model, DIABETIC_CLASSIFICATION_model
         
     except Exception as e:
         logger.error(f":x: Failed to load PyTorch model: {e}")
@@ -70,7 +84,7 @@ def load_model_with_fallback():
 # Инициализация модели
 logger.info("=== Starting PyTorch model initialization ===")
 try:
-    NORMAL_model, PREDIABETIC_model, DIABETIC_model, CLASSIFICATION_model = load_model_with_fallback()
+    NORMAL_model, PREDIABETIC_model, DIABETIC_model, NORMAL_CLASSIFICATION_model, PREDIABETIC_CLASSIFICATION_model, DIABETIC_CLASSIFICATION_model = load_model_with_fallback()
     logger.info(f":white_check_mark: Model initialization completed")
     logger.info(f"Model type: {type(NORMAL_model)}")
 except Exception as e:
@@ -79,7 +93,9 @@ except Exception as e:
     NORMAL_model = None
     PREDIABETIC_model = None
     DIABETIC_model = None
-    CLASSIFICATION_model = None
+    NORMAL_CLASSIFICATION_model = None
+    PREDIABETIC_CLASSIFICATION_model = None
+    DIABETIC_CLASSIFICATION_model = None
 logger.info("=== Model initialization complete ===")
 
 # Добавляем дополнительное логирование для Railway
@@ -92,7 +108,7 @@ logger.info("=== Environment Information Complete ===")
 
 def predict_from_json(data):
     """Предсказание с использованием PyTorch модели"""
-    if NORMAL_model is None or PREDIABETIC_model is None or DIABETIC_model is None or CLASSIFICATION_model is None:
+    if NORMAL_model is None or PREDIABETIC_model is None or DIABETIC_model is None or NORMAL_CLASSIFICATION_model is None or PREDIABETIC_CLASSIFICATION_model is None or DIABETIC_CLASSIFICATION_model is None:
         return {"error": "Model not loaded. Please restart the service."}, 500
     
     try:
@@ -169,7 +185,14 @@ def predict_from_json(data):
         else:
             acceptance_value = 0.018*prediction_value+1.981
 
-        prediction_rescaled = utils.model_inference(CLASSIFICATION_model, x_original)
+            
+        if baseline < 100:
+            prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_original)
+        elif baseline >= 100 and baseline < 125:
+            prediction_rescaled = utils.model_inference(PREDIABETIC_CLASSIFICATION_model, x_original)
+        else:
+            prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_original)
+
         print(prediction_rescaled)
         prediction_array = np.array(prediction_rescaled, dtype=float)
         print(np.shape(prediction_array))
@@ -180,17 +203,27 @@ def predict_from_json(data):
             # Flatten to 1D if needed
             prediction_array = prediction_array.flatten()
 
-            # Mask out classes below baseline
-            # Class 0 = 65, Class 1 = 75, etc. So baseline 90 means we start from class 3 (95)
-            min_class = max(0, int(np.ceil((baseline - 65) / 10)))
-            min_class = max(0, int(np.floor((baseline - 65) / 10)))
-            logger.info(f"min class: {min_class}")
-            # Create a masked array: set logits below min_class to -inf
-            masked_logits = prediction_array.copy()
-            masked_logits[:min_class] = -np.inf
-            print(masked_logits)
+            if baseline < 100:
+                num_classes = 7  # between 75 - 145
+                start_value = 75
+            elif baseline >= 100 and baseline < 125:
+                num_classes = 9 # between 105 - 195
+                start_value = 105
+            else:
+                num_classes = 8 # between 125 - 205
+                start_value = 125
+
+            # # Mask out classes below baseline
+            # # Class 0 = 65, Class 1 = 75, etc. So baseline 90 means we start from class 3 (95)
+            # min_class = max(0, int(np.ceil((baseline - 65) / 10)))
+            # min_class = max(0, int(np.floor((baseline - 65) / 10)))
+            # logger.info(f"min class: {min_class}")
+            # # Create a masked array: set logits below min_class to -inf
+            # masked_logits = prediction_array.copy()
+            # masked_logits[:min_class] = -np.inf
+            # print(masked_logits)
             
-            # predicted_class = int(np.argmax(masked_logits))
+            masked_logits = prediction_array.copy()
 
             # Softmax will give 0 probability to -inf logits
             logits_shifted = masked_logits - np.max(masked_logits)
@@ -198,11 +231,11 @@ def predict_from_json(data):
             probs = exp_logits / np.sum(exp_logits)
             
             # Compute expectation over feasible classes only
-            class_indices = np.arange(15, dtype=float)
+            class_indices = np.arange(num_classes, dtype=float)
             # Compute expected class index (weighted average)
             predicted_class = np.sum(probs * class_indices)
 
-            prediction_value = float(65 + predicted_class*10)
+            prediction_value = float(start_value + predicted_class*10)
             
         print(predicted_class)
         print(prediction_value)

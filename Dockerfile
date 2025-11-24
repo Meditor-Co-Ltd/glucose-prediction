@@ -36,7 +36,9 @@ COPY DIABETIC_average.pkl .
 COPY DIABETIC_average0.pkl .
 COPY DIABETIC_average50.pkl .
 COPY DIABETIC_average100.pkl .
-COPY classification_model_binwidth10.pt .
+COPY classification_model_DIABETIC.pt .
+COPY classification_model_NORMAL.pt .
+COPY classification_model_PREDIABETIC.pt .
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "

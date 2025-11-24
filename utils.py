@@ -10,7 +10,9 @@ import pickle
 NORMAL_TRACED_MODEL_PATH = 'probablistic_model_NORMAL_traced.pt' # Must be the same path
 PREDIABETIC_TRACED_MODEL_PATH = 'probablistic_model_PREDIABETIC_traced.pt'
 DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
-CLASSIFICATION_TRACED_MODEL_PATH = 'classification_model_binwidth10.pt'
+NORMAL_CLASSIFICATION_MODEL_PATH = 'classification_model_NORMAL.pt'
+PREDIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_PREDIABETIC.pt'
+DIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_DIABETIC.pt'
 
 def load_model(TRACED_MODEL_PATH):
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH, map_location='cpu')
@@ -61,12 +63,15 @@ def wavelength_binning(cal_data, measure, dark, reference, bin_size=20):
 
 
 def normalize_1d(x):
-    x_min = x.min()
-    x_max = x.max()
-    x_range = x_max - x_min + 1e-8
-    x_normalized = (x - x_min) / x_range
 
-    return x_normalized
+    # Min-Max normalization (best for absorption spectra)
+    sample_min = np.min(x, axis=1, keepdims=True)
+    sample_max = np.max(x, axis=1, keepdims=True)
+    if np.any(sample_max - sample_min < 1e-8):
+        # Avoid division by zero for flat channels
+        safe_range = np.where(sample_max - sample_min < 1e-8, 1.0, sample_max - sample_min)
+        return (x - sample_min) / safe_range
+    return (x - sample_min) / (sample_max - sample_min)
 
 
 def normalize_inputs(x):
@@ -133,7 +138,7 @@ def preprocess_data(measure, reference, dark, cal_data, baseline):
     # print(np.shape(x))
     # # y = np.array(glucose_values)
     # x = np.expand_dims(x, 0)
-    # print(np.shape(x))
+    print(np.shape(x))
 
     x = np.expand_dims(x, 0)
     x_original = x
