@@ -7,9 +7,9 @@ import torch
 import pickle
 
 # --- Loading the traced model ---
-NORMAL_TRACED_MODEL_PATH = 'probablistic_model_NORMAL_traced.pt' # Must be the same path
-PREDIABETIC_TRACED_MODEL_PATH = 'probablistic_model_PREDIABETIC_traced.pt'
-DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
+# NORMAL_TRACED_MODEL_PATH = 'probablistic_model_NORMAL_traced.pt' # Must be the same path
+# PREDIABETIC_TRACED_MODEL_PATH = 'probablistic_model_PREDIABETIC_traced.pt'
+# DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
 NORMAL_CLASSIFICATION_MODEL_PATH = 'classification_model_NORMAL.pt'
 PREDIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_PREDIABETIC.pt'
 DIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_DIABETIC.pt'
