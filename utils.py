@@ -13,6 +13,7 @@ DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
 NORMAL_CLASSIFICATION_MODEL_PATH = 'classification_model_NORMAL.pt'
 PREDIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_PREDIABETIC.pt'
 DIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_DIABETIC.pt'
+ALL_CLASSIFICATION_MODEL_PATH = 'classification_model_ALL.pt'
 
 def load_model(TRACED_MODEL_PATH):
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH, map_location='cpu')
