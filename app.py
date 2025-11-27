@@ -271,13 +271,13 @@ def predict_from_json(data):
 @app.route('/', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    status = "healthy" if NORMAL_model is not None else "unhealthy"
+    status = "healthy" if ALL_CLASSIFICATION_model is not None else "unhealthy"
     
     # Диагностическая информация
     diagnostics = {
-        "model_file_exists": os.path.exists(utils.NORMAL_TRACED_MODEL_PATH),
-        "model_file_path": utils.NORMAL_TRACED_MODEL_PATH,
-        "model_loaded": NORMAL_model is not None,
+        "model_file_exists": os.path.exists(utils.ALL_CLASSIFICATION_MODEL_PATH),
+        "model_file_path": utils.ALL_CLASSIFICATION_MODEL_PATH,
+        "model_loaded": ALL_CLASSIFICATION_model is not None,
         "working_directory": os.getcwd(),
         "environment": {
             "PORT": os.environ.get('PORT', 'not_set'),
@@ -287,16 +287,16 @@ def health_check():
     }
     
     # Проверяем размер файла модели
-    if os.path.exists(utils.NORMAL_TRACED_MODEL_PATH):
-        diagnostics["model_file_size"] = os.path.getsize(utils.NORMAL_TRACED_MODEL_PATH)
+    if os.path.exists(utils.ALL_CLASSIFICATION_MODEL_PATH):
+        diagnostics["model_file_size"] = os.path.getsize(utils.ALL_CLASSIFICATION_MODEL_PATH)
     
     # Логируем результат health check
-    logger.info(f"Health check: status={status}, model_loaded={NORMAL_model is not None}")
+    logger.info(f"Health check: status={status}, model_loaded={ALL_CLASSIFICATION_model is not None}")
     
     response = {
         "status": status, 
         "message": "Glucose prediction API is running (PyTorch version)",
-        "model_loaded": NORMAL_model is not None,
+        "model_loaded": ALL_CLASSIFICATION_model is not None,
         "model_type": "PyTorch CNN",
         "diagnostics": diagnostics
     }
@@ -304,9 +304,9 @@ def health_check():
     # Если что-то не так, добавляем детали
     if status == "unhealthy":
         error_details = []
-        if not os.path.exists(utils.NORMAL_TRACED_MODEL_PATH):
-            error_details.append(f"Model file not found: {utils.NORMAL_TRACED_MODEL_PATH}")
-        if not NORMAL_model:
+        if not os.path.exists(utils.ALL_CLASSIFICATION_MODEL_PATH):
+            error_details.append(f"Model file not found: {utils.ALL_CLASSIFICATION_MODEL_PATH}")
+        if not ALL_CLASSIFICATION_model:
             error_details.append("Model failed to load - check model file and PyTorch installation")
         response["error_details"] = error_details
     
@@ -316,7 +316,7 @@ def health_check():
 def debug_model():
     """Диагностика PyTorch модели"""
     try:
-        model_path = utils.NORMAL_TRACED_MODEL_PATH
+        model_path = utils.ALL_CLASSIFICATION_MODEL_PATH
         
         result = {
             "file_exists": os.path.exists(model_path),
@@ -372,7 +372,7 @@ def debug_model():
 def predict():
     """Main prediction endpoint"""
     try:
-        if NORMAL_model is None or PREDIABETIC_model is None or DIABETIC_model is None:
+        if ALL_CLASSIFICATION_model is None or NORMAL_CLASSIFICATION_model is None or PREDIABETIC_CLASSIFICATION_model is None or DIABETIC_CLASSIFICATION_model is None:
             return jsonify({"error": "Model not loaded. Please restart the service."}), 503
         
         data = request.get_json()
