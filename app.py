@@ -114,7 +114,7 @@ logger.info("=== Environment Information ===")
 logger.info(f"Python version: {sys.version}")
 logger.info(f"Current working directory: {os.getcwd()}")
 logger.info(f"PORT environment variable: {os.environ.get('PORT', 'not set')}")
-logger.info(f"Model file exists: {os.path.exists(utils.NORMAL_TRACED_MODEL_PATH)}")
+logger.info(f"Model file exists: {os.path.exists(utils.ALL_CLASSIFICATION_MODEL_PATH)}")
 logger.info("=== Environment Information Complete ===")
 
 def predict_from_json(data):
