@@ -21,17 +21,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем код приложения
 COPY app.py .
 COPY utils.py .
-COPY probablistic_model_NORMAL_traced.pt .
+# COPY probablistic_model_NORMAL_traced.pt .
+# COPY probablistic_model_PREDIABETIC_traced.pt .
+# COPY probablistic_model_DIABETIC_traced.pt .
 COPY NORMAL_average.pkl .
 COPY NORMAL_average0.pkl .
 COPY NORMAL_average50.pkl .
 COPY NORMAL_average100.pkl .
-COPY probablistic_model_PREDIABETIC_traced.pt .
 COPY PREDIABETIC_average.pkl .
 COPY PREDIABETIC_average0.pkl .
 COPY PREDIABETIC_average50.pkl .
 COPY PREDIABETIC_average100.pkl .
-COPY probablistic_model_DIABETIC_traced.pt .
 COPY DIABETIC_average.pkl .
 COPY DIABETIC_average0.pkl .
 COPY DIABETIC_average50.pkl .
