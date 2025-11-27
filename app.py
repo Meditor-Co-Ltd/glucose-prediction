@@ -227,7 +227,6 @@ def predict_from_json(data):
             print(np.shape(prediction_array))
             print(prediction_array)
 
-
             # Flatten to 1D if needed
             prediction_array = prediction_array.flatten()
 
@@ -243,6 +242,7 @@ def predict_from_json(data):
                 
             masked_logits = prediction_array.copy()
 
+        print(masked_logits)
         # Softmax will give 0 probability to -inf logits
         logits_shifted = masked_logits - np.max(masked_logits)
         exp_logits = np.exp(logits_shifted)
