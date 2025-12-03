@@ -154,6 +154,7 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
     x_original = x
     x_original = normalize_1d(x_original)
     print(x_original[0, 0, :])
+    print("--------------------------------------------------------------")
     print(x_original[0, 6, :])
     # x = normalize_inputs2(x, baseline)
     print(np.shape(x))
