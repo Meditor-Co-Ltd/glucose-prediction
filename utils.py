@@ -67,7 +67,9 @@ def normalize_1d(x):
 
     # Min-Max normalization (best for absorption spectra)
     sample_min = np.min(x, axis=1, keepdims=True)
+    print(sample_min)
     sample_max = np.max(x, axis=1, keepdims=True)
+    print(sample_max)
     if np.any(sample_max - sample_min < 1e-8):
         # Avoid division by zero for flat channels
         safe_range = np.where(sample_max - sample_min < 1e-8, 1.0, sample_max - sample_min)
@@ -154,10 +156,13 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
         print(np.shape(x))
     x_original = x
     x_original = normalize_1d(x_original)
-    print(x_original[0, 0, :])
+    print(x_original[0, 0, :15])
+    print(x_original[0, 1, :15])
     print("--------------------------------------------------------------")
-    print(x_original[0, 6, :])
-    print(absorption[0, 0, :])
+    print(x_original[0, 6, :15])
+    print(np.min(absorption))
+    print(np.max(absorption))
+    print(absorption[0, 0, :15])
     print("--------------------------------------------------------------")
     # x = normalize_inputs2(x, baseline)
     print(np.shape(x))
