@@ -9,6 +9,7 @@ import traceback
 import utils
 
 USE_ONE_MODEL = True
+USE_ABSORPTION = True
 
 warnings.filterwarnings('ignore')
 
@@ -162,7 +163,7 @@ def predict_from_json(data):
         
         # Препроцессинг данных
         logger.info("Preprocessing data...")
-        x, x_original = utils.preprocess_data(measure, reference, dark, cal_data, baseline)
+        x, x_original = utils.preprocess_data(measure, reference, dark, cal_data, baseline, USE_ABSORPTION)
         
         # Инференс модели
         logger.info("Running model inference...")

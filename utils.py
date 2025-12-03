@@ -122,7 +122,7 @@ def normalize_inputs2(x, baseline):
     return normalized_stacked_x
 
 
-def preprocess_data(measure, reference, dark, cal_data, baseline):
+def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption=False):
 
     # measure = ast.literal_eval(raw_data['measure'])
     # cal_data = ast.literal_eval(raw_data['cal_data'])
@@ -142,6 +142,15 @@ def preprocess_data(measure, reference, dark, cal_data, baseline):
     print(np.shape(x))
 
     x = np.expand_dims(x, 0)
+    if use_absorption:
+        eps = 1e-8
+        num = np.maximum(x[:, 0, :] - x[:, 2, :], eps)
+        den = np.maximum(x[:, 4, :] - x[:, 2, :], eps)
+        absorption = -np.log10(num/den)
+        absorption = np.expand_dims(absorption, axis=1)
+        print(np.shape(absorption))
+        x = np.concatenate([x, absorption], axis=1)
+        print(np.shape(x))
     x_original = x
     x_original = normalize_1d(x_original)
     x = normalize_inputs2(x, baseline)
