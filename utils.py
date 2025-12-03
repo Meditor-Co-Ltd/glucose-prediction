@@ -66,9 +66,9 @@ def wavelength_binning(cal_data, measure, dark, reference, bin_size=20):
 def normalize_1d(x):
 
     # Min-Max normalization (best for absorption spectra)
-    sample_min = np.min(x, axis=1, keepdims=True)
+    sample_min = np.min(x, axis=2, keepdims=True)
     print(sample_min)
-    sample_max = np.max(x, axis=1, keepdims=True)
+    sample_max = np.max(x, axis=2, keepdims=True)
     print(sample_max)
     if np.any(sample_max - sample_min < 1e-8):
         # Avoid division by zero for flat channels
