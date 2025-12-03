@@ -153,7 +153,7 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
         print(np.shape(x))
     x_original = x
     x_original = normalize_1d(x_original)
-    x = normalize_inputs2(x, baseline)
+    # x = normalize_inputs2(x, baseline)
     print(np.shape(x))
 
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
