@@ -147,7 +147,7 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
         num = np.maximum(x[:, 0, :] - x[:, 2, :], eps)
         den = np.maximum(x[:, 4, :] - x[:, 2, :], eps)
         absorption = -np.log10(num/den)
-        print(absorption)
+        print(absorption[0, :])
         absorption = np.expand_dims(absorption, axis=1)
         print(np.shape(absorption))
         x = np.concatenate([x, absorption], axis=1)
@@ -157,6 +157,8 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
     print(x_original[0, 0, :])
     print("--------------------------------------------------------------")
     print(x_original[0, 6, :])
+    print(absorption[0, 0, :])
+    print("--------------------------------------------------------------")
     # x = normalize_inputs2(x, baseline)
     print(np.shape(x))
 
