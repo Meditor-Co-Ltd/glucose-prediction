@@ -124,6 +124,30 @@ def normalize_inputs2(x, baseline):
     return normalized_stacked_x
 
 
+def normalize_per_channel(x_tensor):
+    """
+    Apply per-sample, per-channel min-max normalization.
+    Matches NormalizedTensorDataset._normalize_sample() with per_channel_norm=True.
+    
+    Args:
+        x_tensor: torch.Tensor of shape [batch_size, num_channels, seq_length]
+    
+    Returns:
+        normalized tensor of same shape
+    """
+    # Normalize each channel independently
+    x_min = x_tensor.min(dim=2, keepdim=True)[0]  # Min per channel, shape: (batch, channels, 1)
+    x_max = x_tensor.max(dim=2, keepdim=True)[0]  # Max per channel, shape: (batch, channels, 1)
+    
+    # Avoid division by zero
+    x_range = x_max - x_min
+    x_range = torch.where(x_range < 1e-8, torch.ones_like(x_range), x_range)
+    
+    x_normalized = (x_tensor - x_min) / x_range
+    
+    return x_normalized
+
+
 def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption=False):
 
     # measure = ast.literal_eval(raw_data['measure'])
@@ -154,35 +178,32 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
         # print(np.shape(absorption))
         x = np.concatenate([x, absorption], axis=1)
         print(np.shape(x))
-    x_original = x
-    x_original = normalize_1d(x_original)
-    # print(x_original[0, 0, :15])
-    # print(x_original[0, 1, :15])
-    # print("--------------------------------------------------------------")
-    # print(x_original[0, 6, :15])
-    # print(np.min(absorption))
-    # print(np.max(absorption))
-    # print(absorption[0, 0, :15])
-    # print("--------------------------------------------------------------")
-    # # x = normalize_inputs2(x, baseline)
     print(np.shape(x))
-
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
-    x = torch.from_numpy(x).double()
-    x = x.to(device)
-    x_original = torch.from_numpy(x_original).double()
-    x_original = x_original.to(device)
+    x = torch.from_numpy(x).double().to(device)
 
-    return x, x_original
+    # Apply PER-CHANNEL normalization (matching training)
+    x_normalized = normalize_per_channel(x)
+
+    return x, x_normalized
 
 
 def model_inference(model, x):
+    """
+    Run inference with properly normalized input.
     
+    Args:
+        model: PyTorch model
+        x: Preprocessed and normalized tensor from preprocess_data_corrected()
+    
+    Returns:
+        logits: Raw logits for classification (shape: [1, num_classes])
+    """
+    model.eval()
     with torch.no_grad():
-        prediction = model(x)
+        logits = model(x)  # Shape: (1, num_classes)
 
-    return prediction
+    return logits
 
 
 def rescale_prediction(y):
