@@ -183,7 +183,8 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
     x = torch.from_numpy(x).double().to(device)
 
     # Apply PER-CHANNEL normalization (matching training)
-    x_normalized = normalize_per_channel(x)
+    # x_normalized = normalize_per_channel(x)
+    x_normalized = x
 
     return x, x_normalized
 

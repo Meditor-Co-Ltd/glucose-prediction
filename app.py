@@ -217,7 +217,7 @@ def predict_from_json(data):
 
         else:
             if baseline < 100:
-                prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_original)
+                prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_original)
             elif baseline >= 100 and baseline < 125:
                 prediction_rescaled = utils.model_inference(PREDIABETIC_CLASSIFICATION_model, x_original)
             else:
