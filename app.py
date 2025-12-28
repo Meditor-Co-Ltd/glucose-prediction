@@ -8,7 +8,8 @@ import sys
 import traceback
 import utils
 
-USE_ONE_MODEL = True
+USE_ONE_MODEL = False
+USE_TWO_MODELS = True
 USE_ABSORPTION = True
 
 warnings.filterwarnings('ignore')
@@ -212,10 +213,25 @@ def predict_from_json(data):
             min_class = max(0, int(np.floor((baseline - 65) / 10)))
             logger.info(f"min class: {min_class}")
             # Create a masked array: set logits below min_class to -inf
-            masked_logits = prediction_array.copy()
-            masked_logits[:min_class] = -np.inf
 
-        else:
+        if USE_TWO_MODELS:
+            if baseline < 125:
+                prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_original)
+            else:
+                prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_original)
+            prediction_array = np.array(prediction_rescaled, dtype=float)
+            prediction_array = prediction_array.flatten()
+            if baseline < 125:
+                num_classes = 15  # between 65 - 205
+                start_value = 65
+            else:
+                num_classes = 8 # between 125 - 205
+                start_value = 125
+
+            min_class = max(0, int(np.floor((baseline - start_value) / 10)))
+            logger.info(f"min class: {min_class}")
+
+        if not USE_ONE_MODEL and not USE_TWO_MODELS:
             if baseline < 100:
                 prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_original)
             elif baseline >= 100 and baseline < 125:
@@ -240,9 +256,14 @@ def predict_from_json(data):
             else:
                 num_classes = 8 # between 125 - 205
                 start_value = 125
+            
+            min_class = max(0, int(np.floor((baseline - start_value) / 10)))
+            logger.info(f"min class: {min_class}")
                 
-            masked_logits = prediction_array.copy()
 
+        masked_logits = prediction_array.copy()
+        print(masked_logits)
+        masked_logits[:min_class] = -np.inf
         print(masked_logits)
         # Softmax will give 0 probability to -inf logits
         logits_shifted = masked_logits - np.max(masked_logits)
