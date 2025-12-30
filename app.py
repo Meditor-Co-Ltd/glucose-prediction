@@ -166,6 +166,14 @@ def predict_from_json(data):
         logger.info("Preprocessing data...")
         x, x_original = utils.preprocess_data(measure, reference, dark, cal_data, baseline, USE_ABSORPTION)
         
+        # After preprocessing but before model
+        print("External data statistics:")
+        print(f"  Shape: {x_original.shape}")
+        print(f"  Mean: {x_original.mean():.6f}, Std: {x_original.std():.6f}")
+        print(f"  Min: {x_original.min():.6f}, Max: {x_original.max():.6f}")
+        print(f"  Channel 0 mean: {x_original[:, 0, :].mean():.6f}")
+        print(f"  Channel 6 (absorption) mean: {x_original[:, 6, :].mean():.6f}")
+
         # Инференс модели
         logger.info("Running model inference...")
         # prediction = utils.model_inference(model, x)
