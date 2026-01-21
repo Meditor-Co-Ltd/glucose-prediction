@@ -7,13 +7,9 @@ import torch
 import pickle
 
 # --- Loading the traced model ---
-# NORMAL_TRACED_MODEL_PATH = 'probablistic_model_NORMAL_traced.pt' # Must be the same path
-# PREDIABETIC_TRACED_MODEL_PATH = 'probablistic_model_PREDIABETIC_traced.pt'
-# DIABETIC_TRACED_MODEL_PATH = 'probablistic_model_DIABETIC_traced.pt'
-NORMAL_CLASSIFICATION_MODEL_PATH = 'classification_model_NORMAL.pt'
-PREDIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_PREDIABETIC.pt'
-DIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_DIABETIC.pt'
-ALL_CLASSIFICATION_MODEL_PATH = 'classification_model_ALL.pt'
+NORMAL_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_ALL.pt' #'classification_model_500_650_NORMAL.pt'
+DIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_DIABETIC.pt'
+ALL_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_ALL.pt'
 
 def load_model(TRACED_MODEL_PATH):
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH, map_location='cpu')
@@ -148,7 +144,7 @@ def normalize_per_channel(x_tensor):
     return x_normalized
 
 
-def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption=False):
+def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption=False, wavelength_range=None):
 
     # measure = ast.literal_eval(raw_data['measure'])
     # cal_data = ast.literal_eval(raw_data['cal_data'])
@@ -168,6 +164,27 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
     # print(np.shape(x))
 
     x = np.expand_dims(x, 0)
+    # Apply wavelength range filtering if specified
+    if wavelength_range is not None:
+        start_nm, end_nm = wavelength_range
+        # Assumes data is 420-750nm with 1nm bins (330 total wavelengths)
+        # Calculate indices: index = (wavelength - 420)
+        start_idx = int(start_nm - 420)
+        end_idx = int(end_nm - 420)
+
+        # Validate indices
+        if start_idx < 0 or end_idx > 330 or start_idx >= end_idx:
+            raise ValueError(f"Invalid wavelength range ({start_nm}, {end_nm}). Must be within 420-750nm.")
+
+        print(f"\nApplying wavelength range filter: {start_nm}-{end_nm}nm (indices {start_idx}-{end_idx})")
+        print(f"Original shape: {x.shape}")
+
+        # Slice the wavelength dimension (last dimension)
+        x = x[:, :, start_idx:end_idx]
+
+        print(f"Filtered shape: {x.shape}")
+        print(f"Using {end_idx - start_idx} wavelengths out of 330")
+ 
     if use_absorption:
         eps = 1e-8
         num = np.maximum(x[:, 0, :] - x[:, 2, :], eps)
