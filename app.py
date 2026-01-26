@@ -11,6 +11,7 @@ import utils
 USE_ONE_MODEL = True
 USE_ABSORPTION = True
 WAVELENGTH_RANGE = [500, 650]
+NORMALIZE_PER_CHANNEL = True
 
 warnings.filterwarnings('ignore')
 
@@ -130,7 +131,7 @@ def predict_from_json(data):
         
         # Препроцессинг данных
         logger.info("Preprocessing data...")
-        x, x_original = utils.preprocess_data(measure, reference, dark, cal_data, baseline, USE_ABSORPTION, WAVELENGTH_RANGE)
+        x_original, x_normalized = utils.preprocess_data(measure, reference, dark, cal_data, baseline, USE_ABSORPTION, WAVELENGTH_RANGE)
         
         # After preprocessing but before model
         print("External data statistics:")
@@ -147,7 +148,10 @@ def predict_from_json(data):
             start_value = 65
             num_classes = 15
 
-            prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_original)
+            if not NORMALIZE_PER_CHANNEL:
+                prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_original)
+            else:
+                prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_normalized)
             prediction_array = np.array(prediction_rescaled, dtype=float)
             prediction_array = prediction_array.flatten()
 
@@ -160,9 +164,15 @@ def predict_from_json(data):
 
         else:
             if baseline < 125:
-                prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_original)
+                if not NORMALIZE_PER_CHANNEL:
+                    prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_original)
+                else:
+                    prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_normalized)
             else:
-                prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_original)
+                if not NORMALIZE_PER_CHANNEL:
+                    prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_original)
+                else:
+                    prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_normalized)
             prediction_array = np.array(prediction_rescaled, dtype=float)
             prediction_array = prediction_array.flatten()
             if baseline < 125:

@@ -120,7 +120,7 @@ def normalize_inputs2(x, baseline):
     return normalized_stacked_x
 
 
-def normalize_per_channel(x_tensor):
+def normalize_per_channel(x_tensor, method):
     """
     Apply per-sample, per-channel min-max normalization.
     Matches NormalizedTensorDataset._normalize_sample() with per_channel_norm=True.
@@ -131,16 +131,23 @@ def normalize_per_channel(x_tensor):
     Returns:
         normalized tensor of same shape
     """
+    
     # Normalize each channel independently
-    x_min = x_tensor.min(dim=2, keepdim=True)[0]  # Min per channel, shape: (batch, channels, 1)
-    x_max = x_tensor.max(dim=2, keepdim=True)[0]  # Max per channel, shape: (batch, channels, 1)
-    
-    # Avoid division by zero
-    x_range = x_max - x_min
-    x_range = torch.where(x_range < 1e-8, torch.ones_like(x_range), x_range)
-    
-    x_normalized = (x_tensor - x_min) / x_range
-    
+    if method == 'min_max':
+        x_min = x_tensor.min(dim=2, keepdim=True)[0]  # Min per channel, shape: (batch, channels, 1)
+        x_max = x_tensor.max(dim=2, keepdim=True)[0]  # Max per channel, shape: (batch, channels, 1)
+        
+        # Avoid division by zero
+        x_range = x_max - x_min
+        x_range = torch.where(x_range < 1e-8, torch.ones_like(x_range), x_range)
+        
+        x_normalized = (x_tensor - x_min) / x_range
+    elif method == 'snv':
+        x_mean = x_tensor.mean(dim=2, keepdim=True)  # shape: (1, 7, 1)
+        x_std = x_tensor.std(dim=2, keepdim=True)    # shape: (1, 7, 1)
+        safe_std = torch.where(x_std < 1e-8, torch.ones_like(x_std), x_std)
+        x_normalized = (x_tensor - x_mean) / safe_std
+
     return x_normalized
 
 
@@ -200,8 +207,7 @@ def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption
     x = torch.from_numpy(x).double().to(device)
 
     # Apply PER-CHANNEL normalization (matching training)
-    # x_normalized = normalize_per_channel(x)
-    x_normalized = x
+    x_normalized = normalize_per_channel(x, method='snv')
 
     return x, x_normalized
 
