@@ -9,7 +9,7 @@ import pickle
 # --- Loading the traced model ---
 NORMAL_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_ALL.pt' #'classification_model_500_650_NORMAL.pt'
 DIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_DIABETIC.pt'
-ALL_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_ALL.pt'
+ALL_CLASSIFICATION_MODEL_PATH = 'classification_model_450_650_ALL_both_normalized.pt'
 
 def load_model(TRACED_MODEL_PATH):
     loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH, map_location='cpu')

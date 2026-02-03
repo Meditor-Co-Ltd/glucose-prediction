@@ -10,8 +10,9 @@ import utils
 
 USE_ONE_MODEL = True
 USE_ABSORPTION = True
-WAVELENGTH_RANGE = [500, 650]
+WAVELENGTH_RANGE = [450, 650]
 NORMALIZE_PER_CHANNEL = True
+USE_NORMALIZE_AND_ORIGINAL = True
 
 warnings.filterwarnings('ignore')
 
@@ -132,7 +133,8 @@ def predict_from_json(data):
         # Препроцессинг данных
         logger.info("Preprocessing data...")
         x_original, x_normalized = utils.preprocess_data(measure, reference, dark, cal_data, baseline, USE_ABSORPTION, WAVELENGTH_RANGE)
-        
+        x_concat = np.concatenate([x_original, x_normalized], axis=0)
+        print(x_concat.shape)
         # After preprocessing but before model
         print("External data statistics:")
         print(f"  Shape: {x_original.shape}")
@@ -148,10 +150,14 @@ def predict_from_json(data):
             start_value = 65
             num_classes = 15
 
-            if not NORMALIZE_PER_CHANNEL:
-                prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_original)
+            if not USE_NORMALIZE_AND_ORIGINAL:
+                if not NORMALIZE_PER_CHANNEL:
+                    prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_original)
+                else:
+                    prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_normalized)
             else:
-                prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_normalized)
+                prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_concat)
+
             prediction_array = np.array(prediction_rescaled, dtype=float)
             prediction_array = prediction_array.flatten()
 
@@ -164,15 +170,23 @@ def predict_from_json(data):
 
         else:
             if baseline < 125:
-                if not NORMALIZE_PER_CHANNEL:
-                    prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_original)
+                if not USE_NORMALIZE_AND_ORIGINAL:
+                    if not NORMALIZE_PER_CHANNEL:
+                        prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_original)
+                    else:
+                        prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_normalized)
                 else:
-                    prediction_rescaled = utils.model_inference(NORMAL_CLASSIFICATION_model, x_normalized)
+                    prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_concat)
+
             else:
-                if not NORMALIZE_PER_CHANNEL:
-                    prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_original)
+                if not USE_NORMALIZE_AND_ORIGINAL:
+                    if not NORMALIZE_PER_CHANNEL:
+                        prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_original)
+                    else:
+                        prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_normalized)
                 else:
-                    prediction_rescaled = utils.model_inference(DIABETIC_CLASSIFICATION_model, x_normalized)
+                    prediction_rescaled = utils.model_inference(ALL_CLASSIFICATION_model, x_concat)
+
             prediction_array = np.array(prediction_rescaled, dtype=float)
             prediction_array = prediction_array.flatten()
             if baseline < 125:
