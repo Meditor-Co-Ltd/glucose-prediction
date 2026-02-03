@@ -41,6 +41,7 @@ COPY classification_model_NORMAL.pt .
 COPY classification_model_ALL.pt .
 COPY classification_model_500_650_DIABETIC.pt .
 COPY classification_model_500_650_ALL.pt .
+COPY classification_model_450_650_ALL_both_normalized.pt .
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "
