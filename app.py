@@ -1,6 +1,7 @@
 import os
 import json
 import numpy as np
+import torch
 from flask import Flask, request, jsonify
 import warnings
 import logging
@@ -133,7 +134,7 @@ def predict_from_json(data):
         # Препроцессинг данных
         logger.info("Preprocessing data...")
         x_original, x_normalized = utils.preprocess_data(measure, reference, dark, cal_data, baseline, USE_ABSORPTION, WAVELENGTH_RANGE)
-        x_concat = np.concatenate([x_original, x_normalized], axis=0)
+        x_concat = torch.cat([x_original, x_normalized], dim=0)
         print(x_concat.shape)
         # After preprocessing but before model
         print("External data statistics:")
