@@ -1,239 +1,229 @@
 import numpy as np
-# import pandas as pd
-# import matplotlib.pyplot as plt
-# import pandas as pd
-# import ast
 import torch
-import pickle
 
-# --- Loading the traced model ---
-NORMAL_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_ALL.pt' #'classification_model_500_650_NORMAL.pt'
-DIABETIC_CLASSIFICATION_MODEL_PATH = 'classification_model_500_650_DIABETIC.pt'
-ALL_CLASSIFICATION_MODEL_PATH = 'classification_model_450_650_ALL_both_normalized.pt'
 
-def load_model(TRACED_MODEL_PATH):
-    loaded_traced_model = torch.jit.load(TRACED_MODEL_PATH, map_location='cpu')
-    print(f"Traced model successfully loaded from {TRACED_MODEL_PATH}")
+def load_config(path='configuration.txt'):
+    """
+    Parse a configuration.txt file and return a dict of settings.
+    Handles key = value lines; casts booleans, ints, and floats automatically.
+    """
+    config = {}
+    with open(path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or line.startswith('='):
+                continue
+            if '=' not in line:
+                continue
+            key, _, value = line.partition('=')
+            key = key.strip()
+            value = value.strip()
+            if not key:
+                continue
+            if '#' in value:
+                value = value[:value.index('#')].strip()
+            if value.lower() == 'true':
+                config[key] = True
+            elif value.lower() == 'false':
+                config[key] = False
+            else:
+                try:
+                    config[key] = int(value)
+                except ValueError:
+                    try:
+                        config[key] = float(value)
+                    except ValueError:
+                        config[key] = value
+    return config
 
-    # Set to evaluation mode (important for inference, even for traced models)
-    loaded_traced_model.eval()
-    print("Model set to evaluation mode (loaded_traced_model.eval()).")
 
-    # Move the model to the appropriate device (CPU or GPU)
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
-    loaded_traced_model.to(device)
-    print(f"Model moved to device: {device}")
+def load_model(path):
+    model = torch.jit.load(path, map_location='cpu')
+    model.eval()
+    model.to(torch.device('cpu'))
+    print(f"Model loaded from {path}")
+    return model
 
-    return loaded_traced_model
 
 def wavelength_binning(cal_data, measure, dark, reference, bin_size=20):
-    
-    cal_data = np.asarray(cal_data)
-    measure = np.asarray(measure)
-    dark = np.asarray(dark)
+    cal_data  = np.asarray(cal_data)
+    measure   = np.asarray(measure)
+    dark      = np.asarray(dark)
     reference = np.asarray(reference)
-    measure_binned = []
-    dark_binned = []
+    measure_binned   = []
+    dark_binned      = []
     reference_binned = []
-    measure_binned2 = []
-    dark_binned2 = []
+    measure_binned2  = []
+    dark_binned2     = []
     reference_binned2 = []
     bins = range(420, 750, bin_size)
-    for bin in bins:
-        indices = np.argwhere((cal_data >= bin) & (cal_data <= bin+bin_size))
+    for b in bins:
+        indices = np.argwhere((cal_data >= b) & (cal_data <= b + bin_size))
         measure_binned.append(np.nanmean(measure[indices]))
         dark_binned.append(np.nanmean(dark[indices]))
         reference_binned.append(np.nanmean(reference[indices]))
         measure_binned2.append(np.nanstd(measure[indices]))
         dark_binned2.append(np.nanstd(dark[indices]))
         reference_binned2.append(np.nanstd(reference[indices]))
-
-    measure_binned = np.hstack(measure_binned)
-    dark_binned = np.hstack(dark_binned)
-    reference_binned = np.hstack(reference_binned)
-    measure_binned2 = np.hstack(measure_binned2)
-    dark_binned2 = np.hstack(dark_binned2)
-    reference_binned2 = np.hstack(reference_binned2)
-    
-    return [measure_binned], [dark_binned], [reference_binned], [measure_binned2], [dark_binned2], [reference_binned2]
-
-
-def normalize_1d(x):
-
-    # Min-Max normalization (best for absorption spectra)
-    sample_min = np.min(x, axis=2, keepdims=True)
-    # print(sample_min)
-    sample_max = np.max(x, axis=2, keepdims=True)
-    # print(sample_max)
-    if np.any(sample_max - sample_min < 1e-8):
-        # Avoid division by zero for flat channels
-        safe_range = np.where(sample_max - sample_min < 1e-8, 1.0, sample_max - sample_min)
-        return (x - sample_min) / safe_range
-    return (x - sample_min) / (sample_max - sample_min)
+    return (
+        [np.hstack(measure_binned)],
+        [np.hstack(dark_binned)],
+        [np.hstack(reference_binned)],
+        [np.hstack(measure_binned2)],
+        [np.hstack(dark_binned2)],
+        [np.hstack(reference_binned2)],
+    )
 
 
-def normalize_inputs(x):
-    with open("calibration_value.pkl", 'rb') as f:
-        avg = pickle.load(f)
-    normalized_x = (x - avg) / avg
-    return normalized_x
-
-
-def normalize_inputs2(x, baseline):
-    
-    if baseline < 100:
-        with open("NORMAL_average.pkl", 'rb') as f:
-            avg = pickle.load(f)
-        with open("NORMAL_average0.pkl", 'rb') as f:
-            avg0 = pickle.load(f)
-        with open("NORMAL_average50.pkl", 'rb') as f:
-            avg50 = pickle.load(f)
-        with open("NORMAL_average100.pkl", 'rb') as f:
-            avg100 = pickle.load(f)
-    elif baseline >= 100 and baseline < 125:
-        with open("PREDIABETIC_average.pkl", 'rb') as f:
-            avg = pickle.load(f)
-        with open("PREDIABETIC_average0.pkl", 'rb') as f:
-            avg0 = pickle.load(f)
-        with open("PREDIABETIC_average50.pkl", 'rb') as f:
-            avg50 = pickle.load(f)
-        with open("PREDIABETIC_average100.pkl", 'rb') as f:
-            avg100 = pickle.load(f)
-    else:
-        with open("DIABETIC_average.pkl", 'rb') as f:
-            avg = pickle.load(f)
-        with open("DIABETIC_average0.pkl", 'rb') as f:
-            avg0 = pickle.load(f)
-        with open("DIABETIC_average50.pkl", 'rb') as f:
-            avg50 = pickle.load(f)
-        with open("DIABETIC_average100.pkl", 'rb') as f:
-            avg100 = pickle.load(f)
-
-    normalized_x = (x - avg) / avg
-    normalized_x0 = (x - avg0) / avg0
-    normalized_x50 = (x - avg50) / avg50
-    normalized_x100 = (x - avg100) / avg100
-    normalized_stacked_x = np.hstack((normalized_x, normalized_x0, normalized_x50, normalized_x100))
-    # normalized_stacked_x = np.hstack((normalized_x0, normalized_x50, normalized_x100))
-
-    return normalized_stacked_x
-
-
-def normalize_per_channel(x_tensor, method):
+def add_spectral_derivatives(x_np, derivative_order=1):
     """
-    Apply per-sample, per-channel min-max normalization.
-    Matches NormalizedTensorDataset._normalize_sample() with per_channel_norm=True.
-    
+    Append spectral derivative channels along axis=1.
+    Mirrors add_spectral_derivatives() from the research training code.
+
     Args:
-        x_tensor: torch.Tensor of shape [batch_size, num_channels, seq_length]
-    
+        x_np: numpy array [batch, channels, wavelengths]
+        derivative_order: 1 = first derivative only, 2 = first and second
+
     Returns:
-        normalized tensor of same shape
+        numpy array with derivative channels appended
     """
-    
-    # Normalize each channel independently
-    if method == 'min_max':
-        x_min = x_tensor.min(dim=2, keepdim=True)[0]  # Min per channel, shape: (batch, channels, 1)
-        x_max = x_tensor.max(dim=2, keepdim=True)[0]  # Max per channel, shape: (batch, channels, 1)
-        
-        # Avoid division by zero
-        x_range = x_max - x_min
-        x_range = torch.where(x_range < 1e-8, torch.ones_like(x_range), x_range)
-        
-        x_normalized = (x_tensor - x_min) / x_range
-    elif method == 'snv':
-        x_mean = x_tensor.mean(dim=2, keepdim=True)  # shape: (1, 7, 1)
-        x_std = x_tensor.std(dim=2, keepdim=True)    # shape: (1, 7, 1)
-        safe_std = torch.where(x_std < 1e-8, torch.ones_like(x_std), x_std)
-        x_normalized = (x_tensor - x_mean) / safe_std
-
-    return x_normalized
+    first_deriv = np.gradient(x_np, axis=2)
+    x_np = np.concatenate([x_np, first_deriv], axis=1)
+    if derivative_order >= 2:
+        second_deriv = np.gradient(first_deriv, axis=2)
+        x_np = np.concatenate([x_np, second_deriv], axis=1)
+    return x_np
 
 
-def preprocess_data(measure, reference, dark, cal_data, baseline, use_absorption=False, wavelength_range=None):
+def apply_per_channel_snv(x_tensor):
+    """
+    Apply per-channel SNV normalization and concatenate with the original.
+    Matches NormalizedTensorDataset._normalize_sample(norm_method='snv', per_channel_norm=True).
 
-    # measure = ast.literal_eval(raw_data['measure'])
-    # cal_data = ast.literal_eval(raw_data['cal_data'])
-    # dark = ast.literal_eval(raw_data['dark'])
-    # reference = ast.literal_eval(raw_data['reference'])
+    Args:
+        x_tensor: torch.Tensor [batch, channels, wavelengths]
 
-    measure, dark, reference, measure_std, dark_std, reference_std = wavelength_binning(cal_data, measure, dark, reference, 1)
+    Returns:
+        torch.Tensor [batch, channels*2, wavelengths]
+    """
+    mean     = x_tensor.mean(dim=2, keepdim=True)
+    std      = x_tensor.std(dim=2, keepdim=True)
+    safe_std = torch.where(std < 1e-8, torch.ones_like(std), std)
+    x_snv    = (x_tensor - mean) / safe_std
+    return torch.cat([x_tensor, x_snv], dim=1)
 
-    feature_vector = measure + measure_std + dark + dark_std + reference + reference_std # flat list of numerical features
 
-    # Convert to NumPy arrays
-    x = np.array(feature_vector)
-    # x = normalize_inputs(x)
-    # print(np.shape(x))
-    # # y = np.array(glucose_values)
-    # x = np.expand_dims(x, 0)
-    # print(np.shape(x))
+def preprocess_for_inference(measure, reference, dark, cal_data, config):
+    """
+    Preprocess raw sensor data for model inference, driven by a config dict.
 
-    x = np.expand_dims(x, 0)
-    # Apply wavelength range filtering if specified
-    if wavelength_range is not None:
-        start_nm, end_nm = wavelength_range
-        # Assumes data is 420-750nm with 1nm bins (330 total wavelengths)
-        # Calculate indices: index = (wavelength - 420)
-        start_idx = int(start_nm - 420)
-        end_idx = int(end_nm - 420)
+    Channel order (USE_SIGNAL_STD=True):
+        0: measure, 1: measure_std, 2: dark, 3: dark_std, 4: reference, 5: reference_std,
+        [6: absorption, 7: absorption_std  if USE_ABSORPTION]
+    Channel order (USE_SIGNAL_STD=False):
+        0: measure, 1: dark, 2: reference, [3: absorption  if USE_ABSORPTION]
 
-        # Validate indices
-        if start_idx < 0 or end_idx > 330 or start_idx >= end_idx:
-            raise ValueError(f"Invalid wavelength range ({start_nm}, {end_nm}). Must be within 420-750nm.")
+    Pipeline matches the research training:
+        1. Wavelength binning (1nm bins, means only)
+        2. Stack [measure, dark, reference] -> [1, 3, N_wl]
+        3. Filter to configured wavelength range
+        4. Append absorption channel if USE_ABSORPTION=True
+        5. Add spectral derivatives if ADD_SPECTRAL_DERIVATIVES=True
+        6. Convert to torch.double tensor
+        7. Apply per-channel SNV + concat if PER_CHANNEL_NORM=True
 
-        print(f"\nApplying wavelength range filter: {start_nm}-{end_nm}nm (indices {start_idx}-{end_idx})")
-        print(f"Original shape: {x.shape}")
+    Returns:
+        torch.Tensor ready for model inference, e.g. [1, 16, 200]
+    """
+    use_absorption   = config.get('USE_ABSORPTION', True)
+    use_signal_std   = config.get('USE_SIGNAL_STD', True)
+    wl_start         = int(config.get('wavelength_nm_start', 450))
+    wl_end           = int(config.get('wavelength_nm_end', 650))
+    add_deriv        = config.get('ADD_SPECTRAL_DERIVATIVES', False)
+    deriv_order      = int(config.get('DERIVATIVE_ORDER', 1))
+    per_channel_norm = config.get('PER_CHANNEL_NORM', False)
 
-        # Slice the wavelength dimension (last dimension)
-        x = x[:, :, start_idx:end_idx]
+    # Step 1: wavelength binning (means + stds)
+    measure_b, dark_b, reference_b, measure_std_b, dark_std_b, reference_std_b = wavelength_binning(
+        cal_data, measure, dark, reference, bin_size=1
+    )
+    measure_b       = np.array(measure_b[0])
+    dark_b          = np.array(dark_b[0])
+    reference_b     = np.array(reference_b[0])
+    measure_std_b   = np.array(measure_std_b[0])
+    dark_std_b      = np.array(dark_std_b[0])
+    reference_std_b = np.array(reference_std_b[0])
 
-        print(f"Filtered shape: {x.shape}")
-        print(f"Using {end_idx - start_idx} wavelengths out of 330")
- 
+    # Step 2: stack channels
+    # With stds: [measure, measure_std, dark, dark_std, reference, reference_std] -> [1, 6, N_wl]
+    # Without:   [measure, dark, reference]                                        -> [1, 3, N_wl]
+    if use_signal_std:
+        x = np.stack([measure_b, measure_std_b, dark_b, dark_std_b, reference_b, reference_std_b], axis=0)
+    else:
+        x = np.stack([measure_b, dark_b, reference_b], axis=0)
+    x = np.expand_dims(x, axis=0)
+
+    # Step 3: wavelength range filter
+    start_idx = int(wl_start - 420)
+    end_idx   = int(wl_end - 420)
+    if start_idx < 0 or end_idx > x.shape[2] or start_idx >= end_idx:
+        raise ValueError(f"Invalid wavelength range ({wl_start}, {wl_end}). Must be within 420-750nm.")
+    x = x[:, :, start_idx:end_idx]
+
+    # Step 4: absorption channel
+    # With stds: channels are 0=measure, 1=measure_std, 2=dark, 3=dark_std, 4=reference, 5=reference_std
+    # Without:   channels are 0=measure, 1=dark, 2=reference
     if use_absorption:
         eps = 1e-8
-        num = np.maximum(x[:, 0, :] - x[:, 2, :], eps)
-        den = np.maximum(x[:, 4, :] - x[:, 2, :], eps)
-        absorption = -np.log10(num/den)
-        # print(absorption[0, :])
+        if use_signal_std:
+            m, sigma_m = x[:, 0, :], x[:, 1, :]
+            d, sigma_d = x[:, 2, :], x[:, 3, :]
+            r, sigma_r = x[:, 4, :], x[:, 5, :]
+        else:
+            m, d, r = x[:, 0, :], x[:, 1, :], x[:, 2, :]
+            sigma_m = sigma_d = sigma_r = np.zeros_like(m)
+
+        num = np.maximum(m - d, eps)
+        den = np.maximum(r - d, eps)
+        absorption = -np.log10(num / den)
         absorption = np.expand_dims(absorption, axis=1)
-        # print(np.shape(absorption))
         x = np.concatenate([x, absorption], axis=1)
-        print(np.shape(x))
-    print(np.shape(x))
-    device = torch.device("cpu")
-    x = torch.from_numpy(x).double().to(device)
 
-    # Apply PER-CHANNEL normalization (matching training)
-    x_normalized = normalize_per_channel(x, method='snv')
+        if use_signal_std:
+            # Absorption std via error propagation:
+            # absorption = -log10(num/den), num = m-d, den = r-d
+            ln10 = np.log(10)
+            abs_std = np.sqrt(
+                (sigma_m / (num * ln10)) ** 2 +
+                ((den - num) * sigma_d / (num * den * ln10)) ** 2 +
+                (sigma_r / (den * ln10)) ** 2
+            )
+            abs_std = np.expand_dims(abs_std, axis=1)
+            x = np.concatenate([x, abs_std], axis=1)
 
-    return x, x_normalized
+    # Step 5: spectral derivatives
+    if add_deriv:
+        x = add_spectral_derivatives(x, deriv_order)
+
+    # Step 6: to double tensor
+    x_tensor = torch.from_numpy(x).double().to(torch.device('cpu'))
+
+    # Step 7: per-channel SNV + concat
+    if per_channel_norm:
+        x_tensor = apply_per_channel_snv(x_tensor)
+
+    print(f"Preprocessed tensor shape: {x_tensor.shape}")
+    return x_tensor
 
 
-def model_inference(model, x):
+def regression_inference(model, x):
     """
-    Run inference with properly normalized input.
-    
-    Args:
-        model: PyTorch model
-        x: Preprocessed and normalized tensor from preprocess_data_corrected()
-    
+    Run inference with a probabilistic regression model.
+
     Returns:
-        logits: Raw logits for classification (shape: [1, num_classes])
+        (mu, log_var): both torch.Tensor of shape [1, 1]
     """
     model.eval()
     with torch.no_grad():
-        logits = model(x)  # Shape: (1, num_classes)
-
-    return logits
-
-
-def rescale_prediction(y):
-    # input_min = 0.0
-    # input_max = 1.0
-    output_min = 49.0
-    output_max = 235.0
-
-    return y * (output_max-output_min) + output_min
+        mu, log_var = model(x)
+    return mu, log_var
