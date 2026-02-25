@@ -25,21 +25,36 @@ if __name__ != '__main__':
     app.logger.setLevel(gunicorn_logger.level)
 
 # --- Config-driven setup ---
-CONFIG = utils.load_config('configuration.txt')
-IS_REGRESSION = 'regression' in str(CONFIG.get('NUM_CLASSES', '')).lower()
+CONFIG = utils.load_config('configuration.yaml')
+IS_REGRESSION = CONFIG.get('model', {}).get('num_classes', 1) == 1
 
 
 def load_model_with_fallback():
-    """Load the single model specified in configuration.txt"""
+    """
+    Load the regression model.
+    Search order:
+      1. regression_model*.pt / regression_model*.pth in the current working directory
+      2. <results_path>/regression_model.pt from the YAML (local research machine)
+    """
     try:
-        model_file = CONFIG.get('MODEL_FILE')
-        if not model_file:
-            raise ValueError("MODEL_FILE not set in configuration.txt")
-        if not os.path.exists(model_file):
-            raise FileNotFoundError(f"Model file not found: {model_file}")
-        loaded_model = utils.load_model(model_file)
-        logger.info(f"Model loaded successfully from {model_file}")
-        return loaded_model
+        local_models = sorted(
+            f for f in os.listdir('.')
+            if f.startswith('regression_model') and f.endswith(('.pt', '.pth'))
+        )
+        results_path = CONFIG.get('results_path', '')
+        candidates = local_models[:]
+        if results_path:
+            candidates.append(os.path.join(results_path, 'regression_model.pt'))
+
+        for model_file in candidates:
+            if os.path.exists(model_file):
+                loaded_model = utils.load_model(model_file, CONFIG)
+                logger.info(f"Model loaded successfully from {model_file}")
+                return loaded_model
+
+        raise FileNotFoundError(
+            f"No regression_model*.pt/pth found. Searched: {candidates}"
+        )
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -53,10 +68,18 @@ try:
     logger.info(f"Model initialization completed")
     logger.info(f"Model type: {type(model)}")
     logger.info(f"IS_REGRESSION: {IS_REGRESSION}")
-    logger.info(f"Config: USE_ABSORPTION={CONFIG.get('USE_ABSORPTION')}, "
-                f"wavelength={CONFIG.get('wavelength_nm_start')}-{CONFIG.get('wavelength_nm_end')}nm, "
-                f"ADD_SPECTRAL_DERIVATIVES={CONFIG.get('ADD_SPECTRAL_DERIVATIVES')}, "
-                f"PER_CHANNEL_NORM={CONFIG.get('PER_CHANNEL_NORM')}")
+    data_cfg = CONFIG.get('data', {})
+    spec_cfg = CONFIG.get('spectral', {})
+    norm_cfg = CONFIG.get('normalization', {})
+    ch_cfg   = CONFIG.get('channels', {})
+    logger.info(
+        f"Config: use_absorption={data_cfg.get('use_absorption')}, "
+        f"use_signal_std={data_cfg.get('use_signal_std')}, "
+        f"wavelength={data_cfg.get('wavelength_nm_range')}nm, "
+        f"add_spectral_derivatives={spec_cfg.get('add_spectral_derivatives')}, "
+        f"per_channel_norm={norm_cfg.get('per_channel_norm')}, "
+        f"num_total_channels={ch_cfg.get('num_total_channels')}"
+    )
 except Exception as e:
     logger.error(f"Fatal error during model initialization: {e}")
     model = None
@@ -66,7 +89,6 @@ logger.info("=== Environment Information ===")
 logger.info(f"Python version: {sys.version}")
 logger.info(f"Current working directory: {os.getcwd()}")
 logger.info(f"PORT environment variable: {os.environ.get('PORT', 'not set')}")
-logger.info(f"Model file: {CONFIG.get('MODEL_FILE', 'not set')}")
 logger.info("=== Environment Information Complete ===")
 
 
@@ -107,23 +129,24 @@ def predict_from_json(data):
 
 @app.route('/', methods=['GET'])
 def health_check():
-    model_file = CONFIG.get('MODEL_FILE', 'unknown')
     status = "healthy" if model is not None else "unhealthy"
+    ch_cfg = CONFIG.get('channels', {})
 
     diagnostics = {
-        "model_file": model_file,
-        "model_file_exists": os.path.exists(model_file) if model_file else False,
+        "model_file": "regression_model.pt",
+        "model_file_exists": os.path.exists("regression_model.pt"),
         "model_loaded": model is not None,
         "is_regression": IS_REGRESSION,
+        "num_total_channels": ch_cfg.get('num_total_channels'),
         "working_directory": os.getcwd(),
         "environment": {
             "PORT": os.environ.get('PORT', 'not_set'),
             "PYTHONUNBUFFERED": os.environ.get('PYTHONUNBUFFERED', 'not_set'),
         },
-        "files_in_root": [f for f in os.listdir('.') if f.endswith(('.pt', '.pkl', '.py', '.txt'))],
+        "files_in_root": [f for f in os.listdir('.') if f.endswith(('.pt', '.pkl', '.py', '.txt', '.yaml'))],
     }
-    if model_file and os.path.exists(model_file):
-        diagnostics["model_file_size"] = os.path.getsize(model_file)
+    if os.path.exists("regression_model.pt"):
+        diagnostics["model_file_size"] = os.path.getsize("regression_model.pt")
 
     logger.info(f"Health check: status={status}, model_loaded={model is not None}")
 
@@ -136,8 +159,8 @@ def health_check():
     }
     if status == "unhealthy":
         error_details = []
-        if model_file and not os.path.exists(model_file):
-            error_details.append(f"Model file not found: {model_file}")
+        if not os.path.exists("regression_model.pt"):
+            error_details.append("Model file not found: regression_model.pt")
         if not model:
             error_details.append("Model failed to load")
         response["error_details"] = error_details
@@ -148,7 +171,7 @@ def health_check():
 @app.route('/debug-model', methods=['GET'])
 def debug_model():
     try:
-        model_file = CONFIG.get('MODEL_FILE', '')
+        model_file = 'regression_model.pt'
         result = {
             "file_exists": os.path.exists(model_file),
             "file_path": model_file,

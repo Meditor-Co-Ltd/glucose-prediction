@@ -21,8 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем код приложения
 COPY app.py .
 COPY utils.py .
-COPY configuration.txt .
-COPY regression_model_450_650_ALL.pt .
+COPY models.py .
+COPY configuration.yaml .
+COPY regression_model_450_650_ALL.pth .
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "
