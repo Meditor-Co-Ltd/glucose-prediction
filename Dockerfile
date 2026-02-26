@@ -23,7 +23,7 @@ COPY app.py .
 COPY utils.py .
 COPY models.py .
 COPY configuration.yaml .
-COPY regression_model_450_650_ALL.pth .
+COPY regression_model_450_650_ALL.pt .
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "
