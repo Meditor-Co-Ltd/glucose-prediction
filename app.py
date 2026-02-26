@@ -117,7 +117,7 @@ def predict_from_json(data):
             predicted_glucose = float(mu.item())
             sigma_value = float(log_var.item())
             logger.info(f"Regression prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}")
-            return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4)}
+            return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25}
 
         return {"error": "Non-regression models are not supported in this configuration."}, 500
 
