@@ -1,0 +1,130 @@
+training_date: '20260306'
+version: v14
+results_path: ./RESULTS/20260306_SPECFORMER_regression_baseline70_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
+checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
+inference:
+  inference_only: false
+  use_saved_model: false
+data:
+  file: outlierRemovedRecords3.pkl
+  wavelength_nm_range:
+  - 450
+  - 650
+  sequence_length: 200
+  use_absorption: true
+  use_absorption_only: false
+  use_signal_std: false
+  normalize_labels: false
+  train_split: 0.8
+  val_split: 0.15
+  test_split: 0.05
+  baseline: 70
+  diabetes_mode: 0
+channels:
+  num_base_channels: 4
+  num_total_channels: 16
+  channel_names:
+  - measure
+  - dark
+  - reference
+  - absorption_sensor
+  - d1_measure
+  - d1_dark
+  - d1_reference
+  - d1_absorption_sensor
+  - norm_measure
+  - norm_dark
+  - norm_reference
+  - norm_absorption_sensor
+  - norm_d1_measure
+  - norm_d1_dark
+  - norm_d1_reference
+  - norm_d1_absorption_sensor
+  penalized_channel_indices:
+  - 1
+  - 2
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  penalized_channel_names:
+  - dark
+  - reference
+  - d1_dark
+  - d1_reference
+  - norm_dark
+  - norm_reference
+  - norm_d1_dark
+  - norm_d1_reference
+outlier_removal:
+  remove_absorption_outliers: true
+  outlier_threshold_std: 3
+  outlier_method: per_wavelength
+spectral:
+  add_spectral_derivatives: true
+  derivative_order: 1
+normalization:
+  norm_method: snv
+  per_channel_norm: true
+  average_norm: true
+augmentation:
+  augment_noise: false
+  use_mixup: false
+  mixup_alpha: 0.1
+weighted_sampling:
+  use_weighted_sampling: true
+  weighted_sampling_bins: 10
+  weighted_sampling_power: 0.5
+loss:
+  use_huber_loss: true
+  huber_delta: 10.0
+  nll_weight: 0.5
+  huber_weight: 0.5
+gradient_penalty:
+  gradient_penalty: 0.0
+  channel_gradient_penalty: true
+  base_penalty_weight: 0.001
+  penalized_channel_weight: 0.01
+  gradient_penalty_subsample: 32
+  base_penalized_channels:
+  - 1
+  - 2
+mean_collapse:
+  check_mean_collapse: true
+  mean_collapse_check_epochs: 5
+  mean_collapse_std_ratio_threshold: 0.1
+  mean_collapse_range_threshold: 0.1
+lr_scheduler:
+  use_cosine_annealing: true
+  cosine_t0: 10
+  cosine_t_mult: 2
+  cosine_eta_min: 5.0e-05
+  use_reduce_lr_on_plateau: false
+  plateau_factor: 0.5
+  plateau_patience: 10
+  plateau_min_lr: 1.0e-05
+  plateau_threshold: 5.0e-05
+  finetune_use_plateau: true
+model:
+  model_type: SPECFORMER
+  d_model: 256
+  nhead: 8
+  num_encoder_layers: 8
+  dim_feedforward: 512
+  dropout: 0.1
+  spectral_dropout: 0
+  conv_kernel_size: 15
+  num_inputs: 16
+  sequence_length: 200
+  num_classes: 1
+training:
+  optimizer: AdamW
+  learning_rate: 0.0001
+  learning_rate_finetune: 0.0005
+  weight_decay: 1.0e-05
+  max_grad_norm: 1.0
+  batch_size: 300
+  patience: 15
+  max_epochs: 10000

@@ -1,10 +1,10 @@
-training_date: '20260225'
+training_date: '20260227'
 version: v14
-results_path: ./RESULTS/20260225_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
+results_path: ./RESULTS/20260227_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: false
+  use_saved_model: true
 data:
   file: outlierRemovedRecords3.pkl
   wavelength_nm_range:
@@ -15,9 +15,9 @@ data:
   use_absorption_only: false
   use_signal_std: false
   normalize_labels: false
-  train_split: 0.7
-  val_split: 0.2
-  test_split: 0.1
+  train_split: 0.8
+  val_split: 0.15
+  test_split: 0.05
   baseline: -1
   diabetes_mode: -1
 channels:
@@ -70,7 +70,7 @@ normalization:
   per_channel_norm: true
   average_norm: true
 augmentation:
-  augment_noise: false
+  augment_noise: true
   use_mixup: false
   mixup_alpha: 0.1
 weighted_sampling:
@@ -86,7 +86,7 @@ gradient_penalty:
   gradient_penalty: 0.0
   channel_gradient_penalty: true
   base_penalty_weight: 0.001
-  penalized_channel_weight: 0.02
+  penalized_channel_weight: 0.04
   gradient_penalty_subsample: 32
   base_penalized_channels:
   - 1
@@ -106,6 +106,7 @@ lr_scheduler:
   plateau_patience: 10
   plateau_min_lr: 1.0e-05
   plateau_threshold: 5.0e-05
+  finetune_use_plateau: true
 model:
   model_type: SPECFORMER
   d_model: 256
@@ -123,6 +124,7 @@ training:
   learning_rate: 0.0002
   learning_rate_finetune: 0.0005
   weight_decay: 0.0001
+  max_grad_norm: 1.0
   batch_size: 300
   patience: 70
   max_epochs: 10000
