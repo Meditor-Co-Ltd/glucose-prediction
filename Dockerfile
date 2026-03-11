@@ -22,8 +22,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY utils.py .
 COPY models.py .
-COPY configuration.yaml .
-COPY regression_model_450_650_ALL.pt .
+COPY baseline-1_configuration.yaml .
+COPY baseline-1_regression_model.pt .
+COPY baseline100_configuration.yaml .
+COPY baseline100_regression_model.pt .
+COPY baseline120_configuration.yaml .
+COPY baseline120_regression_model.pt .
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "

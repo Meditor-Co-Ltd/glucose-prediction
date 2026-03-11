@@ -115,6 +115,40 @@ def wavelength_binning(cal_data, measure, dark, reference, bin_size=20):
     )
 
 
+def wavelength_binning2(cal_data, measure, dark, reference, bin_size=1):
+    cal_data = np.asarray(cal_data)
+    measure = np.asarray(measure)
+    dark = np.asarray(dark)
+    reference = np.asarray(reference)
+
+    eps = 1e-8
+    num = np.maximum(measure - dark, eps)
+    den = np.maximum(reference - dark, eps)
+    absorption = -np.log10(num / den)
+
+    measure_binned, dark_binned, reference_binned = [], [], []
+    measure_binned2, dark_binned2, reference_binned2 = [], [], []
+    absorption_binned, absorption_binned2 = [], []
+
+    for bin_start in range(420, 750, bin_size):
+        indices = np.argwhere((cal_data >= bin_start) & (cal_data <= bin_start + bin_size))
+        measure_binned.append(np.nanmean(measure[indices]))
+        dark_binned.append(np.nanmean(dark[indices]))
+        reference_binned.append(np.nanmean(reference[indices]))
+        measure_binned2.append(np.nanstd(measure[indices]))
+        dark_binned2.append(np.nanstd(dark[indices]))
+        reference_binned2.append(np.nanstd(reference[indices]))
+        absorption_binned.append(np.nanmean(absorption[indices]))
+        absorption_binned2.append(np.nanstd(absorption[indices]))
+
+    return (
+        [np.hstack(measure_binned)], [np.hstack(dark_binned)], [np.hstack(reference_binned)],
+        [np.hstack(absorption_binned)],
+        [np.hstack(measure_binned2)], [np.hstack(dark_binned2)], [np.hstack(reference_binned2)],
+        [np.hstack(absorption_binned2)],
+    )
+
+
 def add_spectral_derivatives(x_np, derivative_order=1):
     """
     Append spectral derivative channels along axis=1.
@@ -256,7 +290,6 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config):
     if per_channel_norm:
         x_tensor = apply_per_channel_snv(x_tensor)
 
-    print(f"Preprocessed tensor shape: {x_tensor.shape}")
     return x_tensor
 
 

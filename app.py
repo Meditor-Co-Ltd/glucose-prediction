@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import torch
 from flask import Flask, request, jsonify
 import warnings
 import logging
@@ -24,65 +23,28 @@ if __name__ != '__main__':
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
 
-# --- Config-driven setup ---
-CONFIG = utils.load_config('configuration.yaml')
-IS_REGRESSION = CONFIG.get('model', {}).get('num_classes', 1) == 1
 
+# --- Multi-model setup: one model per baseline range ---
+BASELINE_KEYS = [-1, 100, 120]
 
-def load_model_with_fallback():
-    """
-    Load the regression model.
-    Search order:
-      1. regression_model*.pt / regression_model*.pth in the current working directory
-      2. <results_path>/regression_model.pt from the YAML (local research machine)
-    """
-    try:
-        local_models = sorted(
-            f for f in os.listdir('.')
-            if f.startswith('regression_model') and f.endswith(('.pt', '.pth'))
-        )
-        results_path = CONFIG.get('results_path', '')
-        candidates = local_models[:]
-        if results_path:
-            candidates.append(os.path.join(results_path, 'regression_model.pt'))
-
-        for model_file in candidates:
-            if os.path.exists(model_file):
-                loaded_model = utils.load_model(model_file, CONFIG)
-                logger.info(f"Model loaded successfully from {model_file}")
-                return loaded_model
-
-        raise FileNotFoundError(
-            f"No regression_model*.pt/pth found. Searched: {candidates}"
-        )
-    except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise
-
-
-# Model initialization
 logger.info("=== Starting model initialization ===")
-try:
-    model = load_model_with_fallback()
-    logger.info(f"Model initialization completed")
-    logger.info(f"Model type: {type(model)}")
-    logger.info(f"IS_REGRESSION: {IS_REGRESSION}")
-    data_cfg = CONFIG.get('data', {})
-    spec_cfg = CONFIG.get('spectral', {})
-    norm_cfg = CONFIG.get('normalization', {})
-    ch_cfg   = CONFIG.get('channels', {})
-    logger.info(
-        f"Config: use_absorption={data_cfg.get('use_absorption')}, "
-        f"use_signal_std={data_cfg.get('use_signal_std')}, "
-        f"wavelength={data_cfg.get('wavelength_nm_range')}nm, "
-        f"add_spectral_derivatives={spec_cfg.get('add_spectral_derivatives')}, "
-        f"per_channel_norm={norm_cfg.get('per_channel_norm')}, "
-        f"num_total_channels={ch_cfg.get('num_total_channels')}"
-    )
-except Exception as e:
-    logger.error(f"Fatal error during model initialization: {e}")
-    model = None
+BASELINE_CONFIGS = {}
+BASELINE_MODELS  = {}
+for b in BASELINE_KEYS:
+    try:
+        cfg = utils.load_config(f'baseline{b}_configuration.yaml')
+        BASELINE_CONFIGS[b] = cfg
+        BASELINE_MODELS[b]  = utils.load_model(f'baseline{b}_regression_model.pt', cfg)
+        logger.info(f"baseline{b}: model loaded OK")
+    except Exception as e:
+        logger.error(f"baseline{b}: failed to load — {e}")
+        logger.error(traceback.format_exc())
+
+IS_REGRESSION = (
+    BASELINE_CONFIGS[-1].get('model', {}).get('num_classes', 1) == 1
+    if -1 in BASELINE_CONFIGS else True
+)
+logger.info(f"IS_REGRESSION={IS_REGRESSION}, models loaded: {list(BASELINE_MODELS.keys())}")
 logger.info("=== Model initialization complete ===")
 
 logger.info("=== Environment Information ===")
@@ -92,31 +54,57 @@ logger.info(f"PORT environment variable: {os.environ.get('PORT', 'not set')}")
 logger.info("=== Environment Information Complete ===")
 
 
+def select_baseline_key(baseline_value: float) -> int:
+    """Map a patient baseline glucose value to the appropriate model key."""
+    if baseline_value < 100:
+        return -1
+    elif baseline_value < 120:
+        return 100
+    else:
+        return 120
+
+
 def predict_from_json(data):
-    if model is None:
-        return {"error": "Model not loaded. Please restart the service."}, 500
+    if not BASELINE_MODELS:
+        return {"error": "Models not loaded. Please restart the service."}, 500
 
     try:
         if isinstance(data, list):
             data = data[0]
 
-        measure  = np.array(data.get("measure", []))
+        measure   = np.array(data.get("measure",   []))
         reference = np.array(data.get("reference", []))
-        dark     = np.array(data.get("dark", []))
-        cal_data = np.array(data.get("cal_data", []))
+        dark      = np.array(data.get("dark",      []))
+        cal_data  = np.array(data.get("cal_data",  []))
+
+        baseline = data.get("baseline", 70)
+        if baseline in [None, "None", "null", ""]:
+            baseline = 70
+        else:
+            try:
+                baseline = float(baseline)
+            except (ValueError, TypeError):
+                baseline = 70
 
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
 
-        logger.info("Preprocessing data...")
-        x = utils.preprocess_for_inference(measure, reference, dark, cal_data, CONFIG)
+        key    = select_baseline_key(baseline)
+        config = BASELINE_CONFIGS.get(key)
+        mdl    = BASELINE_MODELS.get(key)
+
+        if config is None or mdl is None:
+            return {"error": f"Model for baseline key {key} is not loaded."}, 500
+
+        logger.info(f"Preprocessing data (baseline={baseline} → model key={key})...")
+        x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config)
 
         logger.info("Running model inference...")
         if IS_REGRESSION:
-            mu, log_var = utils.regression_inference(model, x)
+            mu, log_var = utils.regression_inference(mdl, x)
             predicted_glucose = float(mu.item())
-            sigma_value = float(log_var.item())
-            logger.info(f"Regression prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}")
+            sigma_value       = float(log_var.item())
+            logger.info(f"Regression prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}, baseline_key={key}")
             return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25}
 
         return {"error": "Non-regression models are not supported in this configuration."}, 500
@@ -129,88 +117,36 @@ def predict_from_json(data):
 
 @app.route('/', methods=['GET'])
 def health_check():
-    status = "healthy" if model is not None else "unhealthy"
-    ch_cfg = CONFIG.get('channels', {})
+    models_loaded = {f"baseline{k}": (BASELINE_MODELS.get(k) is not None) for k in BASELINE_KEYS}
+    all_healthy   = all(models_loaded.values())
+    status        = "healthy" if all_healthy else "unhealthy"
 
     diagnostics = {
-        "model_file": "regression_model.pt",
-        "model_file_exists": os.path.exists("regression_model.pt"),
-        "model_loaded": model is not None,
-        "is_regression": IS_REGRESSION,
-        "num_total_channels": ch_cfg.get('num_total_channels'),
+        "models_loaded":     models_loaded,
+        "is_regression":     IS_REGRESSION,
         "working_directory": os.getcwd(),
         "environment": {
-            "PORT": os.environ.get('PORT', 'not_set'),
+            "PORT":             os.environ.get('PORT', 'not_set'),
             "PYTHONUNBUFFERED": os.environ.get('PYTHONUNBUFFERED', 'not_set'),
         },
-        "files_in_root": [f for f in os.listdir('.') if f.endswith(('.pt', '.pkl', '.py', '.txt', '.yaml'))],
+        "files_in_root": [f for f in os.listdir('.') if f.endswith(('.pt', '.pth', '.pkl', '.py', '.txt', '.yaml'))],
     }
-    if os.path.exists("regression_model.pt"):
-        diagnostics["model_file_size"] = os.path.getsize("regression_model.pt")
 
-    logger.info(f"Health check: status={status}, model_loaded={model is not None}")
+    logger.info(f"Health check: status={status}, models={models_loaded}")
 
-    response = {
-        "status": status,
-        "message": "Glucose prediction API is running",
-        "model_loaded": model is not None,
-        "model_type": "Regression" if IS_REGRESSION else "Classification",
+    return jsonify({
+        "status":      status,
+        "message":     "Glucose prediction API is running",
+        "model_type":  "Regression" if IS_REGRESSION else "Classification",
         "diagnostics": diagnostics,
-    }
-    if status == "unhealthy":
-        error_details = []
-        if not os.path.exists("regression_model.pt"):
-            error_details.append("Model file not found: regression_model.pt")
-        if not model:
-            error_details.append("Model failed to load")
-        response["error_details"] = error_details
-
-    return jsonify(response)
-
-
-@app.route('/debug-model', methods=['GET'])
-def debug_model():
-    try:
-        model_file = 'regression_model.pt'
-        result = {
-            "file_exists": os.path.exists(model_file),
-            "file_path": model_file,
-            "file_size": 0,
-            "file_readable": False,
-            "torch_loadable": False,
-            "model_structure": None,
-            "error": None,
-        }
-        if os.path.exists(model_file):
-            result["file_size"] = os.path.getsize(model_file)
-            try:
-                with open(model_file, 'rb') as f:
-                    header = f.read(20)
-                    result["file_readable"] = True
-                    result["file_header_hex"] = header.hex()
-            except Exception as e:
-                result["read_error"] = str(e)
-            try:
-                test_model = torch.jit.load(model_file)
-                result["torch_loadable"] = True
-                result["model_type"] = str(type(test_model))
-                result["model_structure"] = {
-                    "is_jit_module": True,
-                    "training_mode": test_model.training,
-                }
-            except Exception as e:
-                result["torch_error"] = str(e)
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Debug model failed: {e}")
-        return jsonify({"error": str(e)}), 500
+    })
 
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        if model is None:
-            return jsonify({"error": "Model not loaded. Please restart the service."}), 503
+        if not BASELINE_MODELS:
+            return jsonify({"error": "Models not loaded. Please restart the service."}), 503
 
         data = request.get_json()
         if not data:
