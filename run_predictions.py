@@ -56,12 +56,14 @@ def parse_field(v):
 
 def select_baseline_key(baseline_value: float) -> int:
     """Map a patient baseline glucose value to the appropriate model key."""
-    if baseline_value < 100:
-        return -1
-    elif baseline_value < 120:
-        return 100
-    else:
+    if baseline_value >= 120:
         return 120
+    elif baseline_value >= 70 and baseline_value < 120:
+        return 100
+    elif baseline_value > 0 and baseline_value < 70:
+        return 70
+    else:
+        return -1
 
 
 def main():
@@ -355,16 +357,11 @@ def draw_clarke_ega_boundaries(ax):
     x = np.linspace(0, 400, 500)
     ax.plot(x, x * 1.20, 'k--', linewidth=0.8, alpha=0.5)
     ax.plot(x, x * 0.80, 'k--', linewidth=0.8, alpha=0.5)
-    # Hypo / hyper clinical thresholds
-    ax.axvline(70,  color='gray', linewidth=0.6, alpha=0.4)
+    # Clinical thresholds visible in 50-250 range
+    ax.axvline(100, color='gray', linewidth=0.6, alpha=0.4)
     ax.axvline(180, color='gray', linewidth=0.6, alpha=0.4)
-    ax.axhline(70,  color='gray', linewidth=0.6, alpha=0.4)
+    ax.axhline(100, color='gray', linewidth=0.6, alpha=0.4)
     ax.axhline(180, color='gray', linewidth=0.6, alpha=0.4)
-    # Zone D upper boundary (ref <= 70, pred > 70) — upper-D top at pred=180
-    ax.plot([0, 70],  [180, 180], color='gray', linewidth=0.6, alpha=0.4)
-    # Zone D lower boundary (ref >= 240, pred <= 180)
-    ax.plot([240, 400], [70, 70], color='gray', linewidth=0.6, alpha=0.4)
-    ax.plot([240, 240], [0,  70], color='gray', linewidth=0.6, alpha=0.4)
 
 
 def preprocess_from_binned(fv, config):
@@ -506,8 +503,8 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
             ax.text(tx, ty, z, fontsize=18, fontweight='bold',
                     color=ZONE_COLORS[z], alpha=0.4, ha='center', va='center')
 
-    ax.set_xlim(0, 400)
-    ax.set_ylim(0, 400)
+    ax.set_xlim(50, 250)
+    ax.set_ylim(50, 250)
     ax.set_xlabel('Reference Glucose (mg/dL)', fontsize=12, color='white')
     ax.set_ylabel('Predicted Glucose (mg/dL)', fontsize=12, color='white')
     ax.set_title(f'Clarke Error Grid Analysis  (n={n})\n{os.path.basename(pkl_path)}',

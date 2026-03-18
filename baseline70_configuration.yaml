@@ -1,12 +1,12 @@
-training_date: '20260306'
+training_date: '20260317'
 version: v14
-results_path: ./RESULTS/20260306_SPECFORMER_regression_baseline70_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
+results_path: ./RESULTS/20260317_SPECFORMER_regression_baseline70_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: false
+  use_saved_model: true
 data:
-  file: outlierRemovedRecords3.pkl
+  file: outlierRemovedAppendedRecords4.pkl
   wavelength_nm_range:
   - 450
   - 650
@@ -76,7 +76,7 @@ augmentation:
 weighted_sampling:
   use_weighted_sampling: true
   weighted_sampling_bins: 10
-  weighted_sampling_power: 0.5
+  weighted_sampling_power: 0.8
 loss:
   use_huber_loss: true
   huber_delta: 10.0
@@ -126,5 +126,5 @@ training:
   weight_decay: 1.0e-05
   max_grad_norm: 1.0
   batch_size: 300
-  patience: 15
+  patience: 30
   max_epochs: 10000
