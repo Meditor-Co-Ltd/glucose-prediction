@@ -56,9 +56,9 @@ logger.info("=== Environment Information Complete ===")
 
 def select_baseline_key(baseline_value: float) -> int:
     """Map a patient baseline glucose value to the appropriate model key."""
-    if baseline_value < 100:
-        return -1
-    elif baseline_value < 120:
+    if baseline_value <= 100 and baseline_value > 0:
+        return 70
+    elif baseline_value <= 120 and baseline_value > 100:
         return 100
     else:
         return 120
