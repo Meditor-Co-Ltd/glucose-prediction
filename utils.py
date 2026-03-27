@@ -3,6 +3,18 @@ import torch
 import yaml
 
 
+def select_baseline_key(baseline_value: float) -> int:
+    """Map a patient baseline glucose value to the appropriate model key."""
+    if baseline_value > 120:
+        return 120
+    elif baseline_value > 100:
+        return 100
+    elif baseline_value > 0:
+        return 70
+    else:
+        return -1
+
+
 def load_config(path='configuration.yaml'):
     """
     Load a YAML configuration file and return the nested dict.

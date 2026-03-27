@@ -25,7 +25,7 @@ if __name__ != '__main__':
 
 
 # --- Multi-model setup: one model per baseline range ---
-BASELINE_KEYS = [-1, 70, 100, 120]
+BASELINE_KEYS = [70, 100, 120]
 
 logger.info("=== Starting model initialization ===")
 BASELINE_CONFIGS = {}
@@ -41,8 +41,8 @@ for b in BASELINE_KEYS:
         logger.error(traceback.format_exc())
 
 IS_REGRESSION = (
-    BASELINE_CONFIGS[-1].get('model', {}).get('num_classes', 1) == 1
-    if -1 in BASELINE_CONFIGS else True
+    BASELINE_CONFIGS[70].get('model', {}).get('num_classes', 1) == 1
+    if 70 in BASELINE_CONFIGS else True
 )
 logger.info(f"IS_REGRESSION={IS_REGRESSION}, models loaded: {list(BASELINE_MODELS.keys())}")
 logger.info("=== Model initialization complete ===")
@@ -52,16 +52,6 @@ logger.info(f"Python version: {sys.version}")
 logger.info(f"Current working directory: {os.getcwd()}")
 logger.info(f"PORT environment variable: {os.environ.get('PORT', 'not set')}")
 logger.info("=== Environment Information Complete ===")
-
-
-def select_baseline_key(baseline_value: float) -> int:
-    """Map a patient baseline glucose value to the appropriate model key."""
-    if baseline_value <= 100 and baseline_value > 0:
-        return 70
-    elif baseline_value <= 120 and baseline_value > 100:
-        return 100
-    else:
-        return 120
 
 
 def predict_from_json(data):
@@ -89,7 +79,7 @@ def predict_from_json(data):
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
 
-        key    = select_baseline_key(baseline)
+        key    = utils.select_baseline_key(baseline)
         config = BASELINE_CONFIGS.get(key)
         mdl    = BASELINE_MODELS.get(key)
 

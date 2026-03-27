@@ -12,9 +12,9 @@ Usage:
     python run_predictions.py --clarke --dir path/to/csvs  # custom CSV directory
 
 Baseline routing (matches app.py):
-    < 100  → baseline70_regression_model.pt + baseline70_configuration.yaml
-    100-119 → baseline100_regression_model.pt + baseline100_configuration.yaml
-    ≥ 120  → baseline120_regression_model.pt + baseline120_configuration.yaml
+    ≤ 100  → baseline70_regression_model.pt + baseline70_configuration.yaml
+    101-120 → baseline100_regression_model.pt + baseline100_configuration.yaml
+    > 120  → baseline120_regression_model.pt + baseline120_configuration.yaml
 """
 
 import argparse
@@ -54,18 +54,6 @@ def parse_field(v):
 # Main
 # ---------------------------------------------------------------------------
 
-def select_baseline_key(baseline_value: float) -> int:
-    """Map a patient baseline glucose value to the appropriate model key."""
-    if baseline_value >= 120:
-        return 120
-    elif baseline_value >= 70 and baseline_value < 120:
-        return 100
-    elif baseline_value > 0 and baseline_value < 70:
-        return 70
-    else:
-        return -1
-
-
 def main():
     parser = argparse.ArgumentParser(description='Run glucose predictions on a JSON data file.')
     parser.add_argument('--file',     default='alex_last500.json', help='Input JSON file')
@@ -89,7 +77,7 @@ def main():
         return
 
     # --- Select model based on baseline ---
-    key         = select_baseline_key(args.baseline)
+    key         = utils.select_baseline_key(args.baseline)
     config_file = f'baseline{key}_configuration.yaml'
     model_file  = f'baseline{key}_regression_model.pt'
 
@@ -416,7 +404,7 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
     """Load diabeticRecords.pkl, run inference, and draw Clarke EGA."""
     import pickle
 
-    key         = select_baseline_key(baseline)
+    key         = utils.select_baseline_key(baseline)
     config_file = f'baseline{key}_configuration.yaml'
     model_file  = f'baseline{key}_regression_model.pt'
 
@@ -497,8 +485,8 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
                        alpha=0.7, s=18, edgecolors='none')
 
     # Zone labels (approximate centres)
-    for z, (tx, ty) in [('A', (100, 100)), ('B', (50, 150)),
-                         ('C', (100, 280)), ('D', (300, 100)), ('E', (30, 350))]:
+    for z, (tx, ty) in [('A', (100, 100)), ('B', (60, 160)),
+                         ('C', (80, 220)), ('D', (220, 80)), ('E', (200, 240))]:
         if zone_counts.get(z, 0) > 0:
             ax.text(tx, ty, z, fontsize=18, fontweight='bold',
                     color=ZONE_COLORS[z], alpha=0.4, ha='center', va='center')
