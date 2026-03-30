@@ -1,10 +1,10 @@
-training_date: '20260317'
+training_date: '20260329'
 version: v14
-results_path: ./RESULTS/20260317_SPECFORMER_regression_baseline70_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
+results_path: ./RESULTS/20260329_SPECFORMER_regression_baseline70_range450_650_FULL_CHANNELS
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: true
+  use_saved_model: false
 data:
   file: outlierRemovedAppendedRecords4.pkl
   wavelength_nm_range:
@@ -15,9 +15,9 @@ data:
   use_absorption_only: false
   use_signal_std: false
   normalize_labels: false
-  train_split: 0.8
-  val_split: 0.15
-  test_split: 0.05
+  train_split: 0.7
+  val_split: 0.2
+  test_split: 0.1
   baseline: 70
   diabetes_mode: 0
 channels:
@@ -40,24 +40,8 @@ channels:
   - norm_d1_dark
   - norm_d1_reference
   - norm_d1_absorption_sensor
-  penalized_channel_indices:
-  - 1
-  - 2
-  - 5
-  - 6
-  - 9
-  - 10
-  - 13
-  - 14
-  penalized_channel_names:
-  - dark
-  - reference
-  - d1_dark
-  - d1_reference
-  - norm_dark
-  - norm_reference
-  - norm_d1_dark
-  - norm_d1_reference
+  penalized_channel_indices: []
+  penalized_channel_names: []
 outlier_removal:
   remove_absorption_outliers: true
   outlier_threshold_std: 3
@@ -70,7 +54,7 @@ normalization:
   per_channel_norm: true
   average_norm: true
 augmentation:
-  augment_noise: false
+  augment_noise: true
   use_mixup: false
   mixup_alpha: 0.1
 weighted_sampling:
@@ -84,7 +68,7 @@ loss:
   huber_weight: 0.5
 gradient_penalty:
   gradient_penalty: 0.0
-  channel_gradient_penalty: true
+  channel_gradient_penalty: false
   base_penalty_weight: 0.001
   penalized_channel_weight: 0.01
   gradient_penalty_subsample: 32

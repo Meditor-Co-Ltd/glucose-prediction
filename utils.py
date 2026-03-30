@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 import yaml
@@ -70,6 +71,14 @@ def _build_model_from_config(config):
 
 
 def load_model(path, config=None):
+    # If the given path doesn't exist, try the other extension (.pt ↔ .pth)
+    if not os.path.exists(path):
+        alt = path[:-3] + '.pth' if path.endswith('.pt') else path[:-4] + '.pt'
+        if os.path.exists(alt):
+            path = alt
+        else:
+            raise FileNotFoundError(f"Model file not found: {path} (also tried {alt})")
+
     try:
         model = torch.jit.load(path, map_location='cpu')
         model.eval()
