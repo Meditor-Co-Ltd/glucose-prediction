@@ -1,6 +1,6 @@
-training_date: '20260329'
+training_date: '20260331'
 version: v14
-results_path: ./RESULTS/20260329_SPECFORMER_regression_baseline70_range450_650_FULL_CHANNELS
+results_path: ./RESULTS/20260331_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
@@ -18,8 +18,8 @@ data:
   train_split: 0.7
   val_split: 0.2
   test_split: 0.1
-  baseline: 70
-  diabetes_mode: 0
+  baseline: -1
+  diabetes_mode: -1
 channels:
   num_base_channels: 4
   num_total_channels: 16
@@ -40,8 +40,24 @@ channels:
   - norm_d1_dark
   - norm_d1_reference
   - norm_d1_absorption_sensor
-  penalized_channel_indices: []
-  penalized_channel_names: []
+  penalized_channel_indices:
+  - 1
+  - 2
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  penalized_channel_names:
+  - dark
+  - reference
+  - d1_dark
+  - d1_reference
+  - norm_dark
+  - norm_reference
+  - norm_d1_dark
+  - norm_d1_reference
 outlier_removal:
   remove_absorption_outliers: true
   outlier_threshold_std: 3
@@ -68,9 +84,9 @@ loss:
   huber_weight: 0.5
 gradient_penalty:
   gradient_penalty: 0.0
-  channel_gradient_penalty: false
+  channel_gradient_penalty: true
   base_penalty_weight: 0.001
-  penalized_channel_weight: 0.01
+  penalized_channel_weight: 0.003
   gradient_penalty_subsample: 32
   base_penalized_channels:
   - 1
