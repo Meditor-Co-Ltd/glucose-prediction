@@ -4,7 +4,7 @@ results_path: ./RESULTS/20260331_SPECFORMER_regression_baseline-1_range450_650_F
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: false
+  use_saved_model: true
 data:
   file: outlierRemovedAppendedRecords4.pkl
   wavelength_nm_range:
@@ -15,9 +15,9 @@ data:
   use_absorption_only: false
   use_signal_std: false
   normalize_labels: false
-  train_split: 0.7
-  val_split: 0.2
-  test_split: 0.1
+  train_split: 0.9
+  val_split: 0.09
+  test_split: 0.01
   baseline: -1
   diabetes_mode: -1
 channels:
@@ -60,7 +60,7 @@ channels:
   - norm_d1_reference
 outlier_removal:
   remove_absorption_outliers: true
-  outlier_threshold_std: 3
+  outlier_threshold_std: 2
   outlier_method: per_wavelength
 spectral:
   add_spectral_derivatives: true
