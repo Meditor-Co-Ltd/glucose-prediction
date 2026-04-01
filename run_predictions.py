@@ -12,9 +12,9 @@ Usage:
     python run_predictions.py --clarke --dir path/to/csvs  # custom CSV directory
 
 Baseline routing (matches app.py):
-    ≤ 100  → baseline-1_regression_model.pt + baseline-1_configuration.yaml
-    101-120 → baseline100_regression_model.pt + baseline100_configuration.yaml
-    > 120  → baseline120_regression_model.pt + baseline120_configuration.yaml
+    ≤ 100  → baseline-1  (non-diabetic / low baseline)
+    101-120 → baseline100
+    > 120  → baseline120
 """
 
 import argparse
