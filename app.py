@@ -78,6 +78,7 @@ def predict_from_json(data):
 
         last_glucose_values = data.get("last_glucose_values", {})
 
+        logger.info(f"Incoming request keys: {list(data.keys())}")
         logger.info(f"Incoming request — baseline={baseline}, "
                     f"measure_len={len(measure)}, reference_len={len(reference)}, "
                     f"dark_len={len(dark)}, cal_data_len={len(cal_data)}, "
