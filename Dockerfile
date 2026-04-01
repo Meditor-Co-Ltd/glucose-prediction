@@ -23,7 +23,7 @@ COPY app.py .
 COPY utils.py .
 COPY models.py .
 COPY baseline-1_configuration.yaml .
-COPY baseline-1_regression_model.pt .
+COPY baseline-1_regression_model.pth .
 COPY baseline70_configuration.yaml .
 COPY baseline70_regression_model.pth .
 COPY baseline100_configuration.yaml .
