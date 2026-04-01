@@ -41,8 +41,8 @@ for b in BASELINE_KEYS:
         logger.error(traceback.format_exc())
 
 IS_REGRESSION = (
-    BASELINE_CONFIGS[70].get('model', {}).get('num_classes', 1) == 1
-    if 70 in BASELINE_CONFIGS else True
+    BASELINE_CONFIGS[-1].get('model', {}).get('num_classes', 1) == 1
+    if -1 in BASELINE_CONFIGS else True
 )
 logger.info(f"IS_REGRESSION={IS_REGRESSION}, models loaded: {list(BASELINE_MODELS.keys())}")
 logger.info("=== Model initialization complete ===")
@@ -75,6 +75,13 @@ def predict_from_json(data):
                 baseline = float(baseline)
             except (ValueError, TypeError):
                 baseline = 70
+
+        last_glucose_values = data.get("last_glucose_values", {})
+
+        logger.info(f"Incoming request — baseline={baseline}, "
+                    f"measure_len={len(measure)}, reference_len={len(reference)}, "
+                    f"dark_len={len(dark)}, cal_data_len={len(cal_data)}, "
+                    f"last_glucose_values={last_glucose_values}")
 
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400

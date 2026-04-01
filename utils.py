@@ -10,8 +10,6 @@ def select_baseline_key(baseline_value: float) -> int:
         return 120
     elif baseline_value > 100:
         return 100
-    elif baseline_value > 0:
-        return 70
     else:
         return -1
 
