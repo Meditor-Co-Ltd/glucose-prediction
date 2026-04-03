@@ -1,18 +1,18 @@
 """
-run_predictions.py — batch inference on a JSON data file, or Clarke EGA on CSV test data.
+run_predictions.py — batch inference on a JSON data file, or Clarke EGA on a pkl file.
 
 Usage:
-    python run_predictions.py                              # alex_last500.json, last 2 months, baseline 120
+    python run_predictions.py                              # alex_last500.json, last 2 months, baseline-1 model
     python run_predictions.py --file my_data.json
-    python run_predictions.py --file my_data.json --baseline 70
+    python run_predictions.py --file my_data.json --baseline 120
     python run_predictions.py --file my_data.json --months 3
     python run_predictions.py --file my_data.json --all    # no date filter
     python run_predictions.py --no-plot                    # skip histogram
-    python run_predictions.py --clarke                     # Clarke EGA on 2026_diabetic_testdata/123/
-    python run_predictions.py --clarke --dir path/to/csvs  # custom CSV directory
+    python run_predictions.py --clarke                     # Clarke EGA on diabeticRecords.pkl
+    python run_predictions.py --clarke --pkl path/to/data.pkl
 
 Baseline routing (matches app.py):
-    ≤ 100  → baseline-1  (non-diabetic / low baseline)
+    ≤ 100  → baseline-1  (BandEnsemble, non-diabetic / low baseline)
     101-120 → baseline100
     > 120  → baseline120
 """
@@ -57,9 +57,9 @@ def parse_field(v):
 def main():
     parser = argparse.ArgumentParser(description='Run glucose predictions on a JSON data file.')
     parser.add_argument('--file',     default='alex_last500.json', help='Input JSON file')
-    parser.add_argument('--baseline', type=float, default=120,
-                        help='Patient baseline glucose (default: 120). Selects the model: '
-                             '<100 → baseline70, 100-119 → baseline100, ≥120 → baseline120')
+    parser.add_argument('--baseline', type=float, default=70,
+                        help='Patient baseline glucose (default: 70). Selects the model: '
+                             '≤100 → baseline-1 (BandEnsemble), 101-120 → baseline100, >120 → baseline120')
     parser.add_argument('--months',   type=float, default=2.0,
                         help='Only predict on last N months of data (default: 2)')
     parser.add_argument('--all',      action='store_true',

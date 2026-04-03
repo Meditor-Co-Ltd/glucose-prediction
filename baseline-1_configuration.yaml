@@ -1,6 +1,6 @@
 training_date: '20260403'
 version: v15
-results_path: ./RESULTS/20260403_BANDENSEMBLE_regression_baseline-1_range450_650_band25nm_FULL_CHANNELS_CHANNEL_PENALTY
+results_path: ./RESULTS/20260403_BANDENSEMBLE_regression_baseline-1_range450_650_band25nm_FULL_CHANNELS
 checkpoint_path: ./regression_tensorboard\checkpoints\best_band_model.pth
 data:
   file: outlierRemovedAppendedRecords4.pkl
@@ -12,8 +12,8 @@ data:
   use_absorption_only: false
   use_signal_std: false
   normalize_labels: false
-  train_split: 0.9
-  val_split: 0.09
+  train_split: 0.8
+  val_split: 0.19
   test_split: 0.01
   baseline: -1
   diabetes_mode: -1
@@ -37,24 +37,8 @@ channels:
   - norm_d1_dark
   - norm_d1_reference
   - norm_d1_absorption_sensor
-  penalized_channel_indices:
-  - 1
-  - 2
-  - 5
-  - 6
-  - 9
-  - 10
-  - 13
-  - 14
-  penalized_channel_names:
-  - dark
-  - reference
-  - d1_dark
-  - d1_reference
-  - norm_dark
-  - norm_reference
-  - norm_d1_dark
-  - norm_d1_reference
+  penalized_channel_indices: []
+  penalized_channel_names: []
 outlier_removal:
   remove_absorption_outliers: true
   outlier_threshold_std: 2
@@ -67,7 +51,7 @@ normalization:
   per_channel_norm: true
   average_norm: true
 augmentation:
-  augment_noise: true
+  augment_noise: false
   use_mixup: false
   mixup_alpha: 0.1
 weighted_sampling:
@@ -80,7 +64,7 @@ loss:
   nll_weight: 0.5
   huber_weight: 0.5
 gradient_penalty:
-  channel_gradient_penalty: true
+  channel_gradient_penalty: false
   base_penalty_weight: 0.001
   penalized_channel_weight: 0.003
   gradient_penalty_subsample: 32
