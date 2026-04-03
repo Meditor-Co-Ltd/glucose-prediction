@@ -960,3 +960,64 @@ def weighted_emd_focal_loss_with_regularization(model, x_batch, logits, targets,
     return total_loss, weighted_focal_loss, weighted_emd, grad_penalty
 
 # ============================================================================
+# Band Ensemble Model
+# ============================================================================
+
+class BandEncoder(nn.Module):
+    """Small CNN encoder for a single spectral band."""
+    def __init__(self, input_channels: int, d_model: int = 128,
+                 normalize_labels: bool = False):
+        super().__init__()
+        self.cnn = nn.Sequential(
+            nn.Conv1d(input_channels, d_model // 2, kernel_size=5, padding=2),
+            nn.BatchNorm1d(d_model // 2),
+            nn.ReLU(),
+            nn.Dropout(p=0.25),
+            nn.Conv1d(d_model // 2, d_model, kernel_size=5, padding=2),
+            nn.BatchNorm1d(d_model),
+            nn.ReLU(),
+            nn.Dropout(p=0.25),
+        )
+        self.pool = nn.AdaptiveAvgPool1d(1)
+        self.drop = nn.Dropout(p=0.25)
+        if normalize_labels:
+            self.mu_head = nn.Sequential(nn.Linear(d_model, 1), nn.Sigmoid())
+        else:
+            self.mu_head = nn.Sequential(nn.Linear(d_model, 1), nn.Softplus())
+        self.sigma_head = nn.Linear(d_model, 1)
+
+    def forward(self, x):
+        x = self.cnn(x)
+        x = self.pool(x)
+        x = torch.flatten(x, 1)
+        x = self.drop(x)
+        return self.mu_head(x), self.sigma_head(x)
+
+
+class BandEnsembleModel(nn.Module):
+    """Splits the input spectrum into equal-width bands and runs an independent
+    BandEncoder on each. Returns per-band predictions plus a learnable weighted
+    ensemble prediction."""
+    def __init__(self, seq_len: int, input_channels: int, band_width: int = 25,
+                 d_model: int = 128, normalize_labels: bool = False):
+        super().__init__()
+        assert seq_len % band_width == 0, \
+            f"seq_len {seq_len} must be divisible by band_width {band_width}"
+        self.band_width = band_width
+        self.num_bands = seq_len // band_width
+        self.encoders = nn.ModuleList([
+            BandEncoder(input_channels, d_model, normalize_labels)
+            for _ in range(self.num_bands)
+        ])
+        self.band_log_weights = nn.Parameter(torch.zeros(self.num_bands))
+
+    def forward(self, x):
+        bands = x.split(self.band_width, dim=2)
+        band_outputs = [enc(b) for enc, b in zip(self.encoders, bands)]
+        weights = torch.softmax(self.band_log_weights, dim=0)
+        mus = torch.cat([mu for mu, _ in band_outputs], dim=1)
+        lvs = torch.cat([lv for _, lv in band_outputs], dim=1)
+        w = weights.unsqueeze(0)
+        mu_final = (w * mus).sum(dim=1, keepdim=True)
+        lv_final = torch.log((w ** 2 * lvs.exp()).sum(dim=1, keepdim=True) + 1e-8)
+        return mu_final, lv_final, band_outputs, weights

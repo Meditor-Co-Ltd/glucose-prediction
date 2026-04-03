@@ -1,10 +1,7 @@
-training_date: '20260331'
-version: v14
-results_path: ./RESULTS/20260331_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
-checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
-inference:
-  inference_only: false
-  use_saved_model: true
+training_date: '20260401'
+version: v15
+results_path: ./RESULTS/20260401_BANDENSEMBLE_regression_baseline-1_range450_650_band25nm_FULL_CHANNELS_CHANNEL_PENALTY
+checkpoint_path: ./regression_tensorboard\checkpoints\best_band_model.pth
 data:
   file: outlierRemovedAppendedRecords4.pkl
   wavelength_nm_range:
@@ -83,7 +80,6 @@ loss:
   nll_weight: 0.5
   huber_weight: 0.5
 gradient_penalty:
-  gradient_penalty: 0.0
   channel_gradient_penalty: true
   base_penalty_weight: 0.001
   penalized_channel_weight: 0.003
@@ -107,18 +103,38 @@ lr_scheduler:
   plateau_min_lr: 1.0e-05
   plateau_threshold: 5.0e-05
   finetune_use_plateau: true
-model:
-  model_type: SPECFORMER
-  d_model: 256
-  nhead: 8
-  num_encoder_layers: 8
-  dim_feedforward: 512
-  dropout: 0.1
-  spectral_dropout: 0
-  conv_kernel_size: 15
+band_model:
+  band_width: 25
+  d_model: 128
+  band_loss_weight: 0.2
+  num_bands: 8
+  band_ranges_nm:
+  - !!python/tuple
+    - 450
+    - 474
+  - !!python/tuple
+    - 475
+    - 499
+  - !!python/tuple
+    - 500
+    - 524
+  - !!python/tuple
+    - 525
+    - 549
+  - !!python/tuple
+    - 550
+    - 574
+  - !!python/tuple
+    - 575
+    - 599
+  - !!python/tuple
+    - 600
+    - 624
+  - !!python/tuple
+    - 625
+    - 649
   num_inputs: 16
   sequence_length: 200
-  num_classes: 1
 training:
   optimizer: AdamW
   learning_rate: 0.0001

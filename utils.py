@@ -41,6 +41,16 @@ def _build_model_from_config(config):
     spectral_dropout = float(model_cfg.get('spectral_dropout', 0.0))
     conv_kernel_size = model_cfg.get('conv_kernel_size', 15)
 
+    if model_type == 'BANDENSEMBLE':
+        from models import BandEnsembleModel
+        bcfg = config.get('band_model', {})
+        return BandEnsembleModel(
+            seq_len=bcfg.get('sequence_length', seq_len),
+            input_channels=bcfg.get('num_inputs', input_channels),
+            band_width=bcfg.get('band_width', 25),
+            d_model=bcfg.get('d_model', 128),
+            normalize_labels=normalize_labels,
+        )
     if model_type == 'SPECFORMER2':
         return SpecFormer2(
             seq_len=seq_len,
@@ -323,5 +333,10 @@ def regression_inference(model, x):
     dtype = next(model.parameters()).dtype
     x = x.to(dtype)
     with torch.no_grad():
-        mu, log_var = model(x)
+        out = model(x)
+    # BandEnsembleModel returns (mu, log_var, band_outputs, weights); others return (mu, log_var)
+    if isinstance(out, (tuple, list)) and len(out) == 4:
+        mu, log_var = out[0], out[1]
+    else:
+        mu, log_var = out
     return mu, log_var
