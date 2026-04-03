@@ -28,7 +28,8 @@ def _build_model_from_config(config):
     model_cfg = config.get('model', {})
     data_cfg  = config.get('data', {})
 
-    model_type       = model_cfg.get('model_type', 'SPECFORMER').upper()
+    default_type = 'BANDENSEMBLE' if 'band_model' in config else 'SPECFORMER'
+    model_type   = model_cfg.get('model_type', default_type).upper()
     seq_len          = data_cfg.get('sequence_length', model_cfg.get('sequence_length', 200))
     input_channels   = model_cfg.get('num_inputs', 16)
     num_classes      = model_cfg.get('num_classes', 1)
@@ -43,12 +44,11 @@ def _build_model_from_config(config):
 
     if model_type == 'BANDENSEMBLE':
         from models import BandEnsembleModel
-        bcfg = config.get('band_model', {})
         return BandEnsembleModel(
-            seq_len=bcfg.get('sequence_length', seq_len),
-            input_channels=bcfg.get('num_inputs', input_channels),
-            band_width=bcfg.get('band_width', 25),
-            d_model=bcfg.get('d_model', 128),
+            seq_len=model_cfg.get('sequence_length', seq_len),
+            input_channels=model_cfg.get('num_inputs', input_channels),
+            band_width=model_cfg.get('band_width', 25),
+            d_model=model_cfg.get('d_model', 128),
             normalize_labels=normalize_labels,
         )
     if model_type == 'SPECFORMER2':
