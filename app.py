@@ -1,11 +1,15 @@
 import os
 import numpy as np
 from flask import Flask, request, jsonify
+from datetime import datetime, timedelta
 import warnings
 import logging
 import sys
 import traceback
 import utils
+
+AVERAGE_LAST_5MIN = False
+AVERAGE_WINDOW_MINUTES = 5
 
 warnings.filterwarnings('ignore')
 
@@ -77,12 +81,14 @@ def predict_from_json(data):
             except (ValueError, TypeError):
                 baseline = 70
 
-        last_glucose_values = data.get("last_glucose_values", {})
+        last_glucose_values = data.get("last_glucose_values") or []
+        current_time_str    = data.get("current_time", None)
 
         logger.info(f"Incoming request keys: {list(data.keys())}")
         logger.info(f"Incoming request — baseline={baseline}, "
                     f"measure_len={len(measure)}, reference_len={len(reference)}, "
                     f"dark_len={len(dark)}, cal_data_len={len(cal_data)}, "
+                    f"current_time={current_time_str}, "
                     f"last_glucose_values={last_glucose_values}")
 
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
@@ -103,6 +109,26 @@ def predict_from_json(data):
             mu, log_var = utils.regression_inference(mdl, x)
             predicted_glucose = float(mu.item())
             sigma_value       = float(log_var.item())
+
+            if AVERAGE_LAST_5MIN and current_time_str and isinstance(last_glucose_values, list) and last_glucose_values:
+                try:
+                    current_dt = datetime.fromisoformat(current_time_str)
+                    cutoff     = current_dt - timedelta(minutes=AVERAGE_WINDOW_MINUTES)
+                    recent = [
+                        entry["glucose"]
+                        for entry in last_glucose_values
+                        if isinstance(entry, dict)
+                        and "timestamp" in entry
+                        and "glucose" in entry
+                        and datetime.fromisoformat(entry["timestamp"]) >= cutoff
+                    ]
+                    if recent:
+                        averaged = (predicted_glucose + sum(recent)) / (1 + len(recent))
+                        logger.info(f"Averaged with {len(recent)} recent values {recent} → {averaged:.2f}")
+                        predicted_glucose = averaged
+                except Exception as e:
+                    logger.warning(f"Could not apply 5-min averaging: {e}")
+
             logger.info(f"Regression prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}, baseline_key={key}")
             return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25}
 
