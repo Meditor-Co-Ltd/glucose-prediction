@@ -1,6 +1,6 @@
-training_date: '20260403'
+training_date: '20260404'
 version: v14
-results_path: ./RESULTS/20260403_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS
+results_path: ./RESULTS/20260404_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
@@ -22,7 +22,7 @@ data:
   diabetes_mode: -1
 channels:
   num_base_channels: 4
-  num_total_channels: 16
+  num_total_channels: 24
   channel_names:
   - measure
   - dark
@@ -40,11 +40,27 @@ channels:
   - norm_d1_dark
   - norm_d1_reference
   - norm_d1_absorption_sensor
-  penalized_channel_indices: []
-  penalized_channel_names: []
+  penalized_channel_indices:
+  - 1
+  - 2
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  penalized_channel_names:
+  - dark
+  - reference
+  - d1_dark
+  - d1_reference
+  - norm_dark
+  - norm_reference
+  - norm_d1_dark
+  - norm_d1_reference
 outlier_removal:
   remove_absorption_outliers: true
-  outlier_threshold_std: 2
+  outlier_threshold_std: 3
   outlier_method: per_wavelength
 spectral:
   add_spectral_derivatives: true
@@ -60,8 +76,8 @@ augmentation:
 weighted_sampling:
   use_weighted_sampling: true
   weighted_sampling_bins: 10
-  weighted_sampling_power: 0.8
-  undersample: true
+  weighted_sampling_power: 0.6
+  undersample: false
 loss:
   use_huber_loss: true
   huber_delta: 10.0
@@ -69,9 +85,9 @@ loss:
   huber_weight: 0.5
 gradient_penalty:
   gradient_penalty: 0.0
-  channel_gradient_penalty: false
+  channel_gradient_penalty: true
   base_penalty_weight: 0.001
-  penalized_channel_weight: 0.003
+  penalized_channel_weight: 0.002
   gradient_penalty_subsample: 32
   base_penalized_channels:
   - 1
@@ -101,7 +117,7 @@ model:
   dropout: 0.1
   spectral_dropout: 0
   conv_kernel_size: 15
-  num_inputs: 16
+  num_inputs: 24
   sequence_length: 200
   num_classes: 1
 training:

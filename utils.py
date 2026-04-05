@@ -216,13 +216,14 @@ def apply_per_channel_snv(x_tensor):
     return torch.cat([x_tensor, x_snv], dim=1)
 
 
-def preprocess_for_inference(measure, reference, dark, cal_data, config):
+def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=None):
     """
     Preprocess raw sensor data for model inference, driven by a YAML config dict.
 
     Channel order (use_signal_std=False, default for v14):
         0: measure, 1: dark, 2: reference, [3: absorption_computed  if use_absorption]
         → 4 base channels → 8 after derivatives → 16 after SNV concat
+          [+8 population-normalize channels if population_normalize=True → 24 total]
 
     Channel order (use_signal_std=True, legacy):
         0: measure, 1: measure_std, 2: dark, 3: dark_std, 4: reference, 5: reference_std,
@@ -235,20 +236,27 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config):
         3. Filter to configured wavelength range
         4. Append absorption channel if use_absorption=True
         5. Add spectral derivatives if add_spectral_derivatives=True
-        6. Convert to torch.double tensor
-        7. Apply per-channel SNV + concat if per_channel_norm=True
+        6. Compute population-normalize channels if population_normalize=True and pop_avg given
+        7. Convert to torch.double tensor
+        8. Apply per-channel SNV + concat if per_channel_norm=True
+        9. Append population-normalize tensor if population_normalize=True
+
+    Args:
+        pop_avg: numpy array [C, W] (training-set mean, post-derivatives); required when
+                 config has population_normalize=True. Ignored otherwise.
 
     Returns:
         torch.Tensor ready for model inference, e.g. [1, 16, 200] or [1, 32, 200]
     """
-    wl_range         = config.get('data', {}).get('wavelength_nm_range', [450, 650])
-    use_absorption   = config.get('data', {}).get('use_absorption', True)
-    use_signal_std   = config.get('data', {}).get('use_signal_std', True)
-    wl_start         = int(wl_range[0])
-    wl_end           = int(wl_range[1])
-    add_deriv        = config.get('spectral', {}).get('add_spectral_derivatives', False)
-    deriv_order      = int(config.get('spectral', {}).get('derivative_order', 1))
-    per_channel_norm = config.get('normalization', {}).get('per_channel_norm', False)
+    wl_range             = config.get('data', {}).get('wavelength_nm_range', [450, 650])
+    use_absorption       = config.get('data', {}).get('use_absorption', True)
+    use_signal_std       = config.get('data', {}).get('use_signal_std', True)
+    population_normalize = config.get('data', {}).get('population_normalize', False)
+    wl_start             = int(wl_range[0])
+    wl_end               = int(wl_range[1])
+    add_deriv            = config.get('spectral', {}).get('add_spectral_derivatives', False)
+    deriv_order          = int(config.get('spectral', {}).get('derivative_order', 1))
+    per_channel_norm     = config.get('normalization', {}).get('per_channel_norm', False)
 
     # Step 1: wavelength binning (means + stds)
     measure_b, dark_b, reference_b, measure_std_b, dark_std_b, reference_std_b = wavelength_binning(
@@ -312,12 +320,25 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config):
     if add_deriv:
         x = add_spectral_derivatives(x, deriv_order)
 
-    # Step 6: to double tensor
+    # Step 6: population-normalize channels (computed pre-SNV, same as training)
+    x_pop_np = None
+    if population_normalize:
+        if pop_avg is None:
+            raise ValueError("population_normalize=True in config but no pop_avg was provided.")
+        eps = 1e-8
+        x_pop_np = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)  # [1, C, W]
+
+    # Step 7: to double tensor
     x_tensor = torch.from_numpy(x).double().to(torch.device('cpu'))
 
-    # Step 7: per-channel SNV + concat
+    # Step 8: per-channel SNV + concat
     if per_channel_norm:
         x_tensor = apply_per_channel_snv(x_tensor)
+
+    # Step 9: append population-normalize tensor
+    if x_pop_np is not None:
+        x_pop_tensor = torch.from_numpy(x_pop_np).double().to(torch.device('cpu'))
+        x_tensor = torch.cat([x_tensor, x_pop_tensor], dim=1)
 
     return x_tensor
 

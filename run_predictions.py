@@ -87,6 +87,11 @@ def main():
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
+    avg_path = f'baseline{key}_average.npy'
+    pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
+    if pop_avg is not None:
+        print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
+
     # --- Load data ---
     print(f'Loading data:   {args.file}')
     with open(args.file, 'r') as f:
@@ -127,7 +132,7 @@ def main():
             dark      = np.array(parse_field(r['dark']),       dtype=float)
             cal_data  = np.array(parse_field(r['cal_data']),   dtype=float)
 
-            x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config)
+            x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=pop_avg)
             mu, log_var = utils.regression_inference(model, x)
 
             g = float(mu.item())
@@ -352,7 +357,7 @@ def draw_clarke_ega_boundaries(ax):
     ax.axhline(180, color='gray', linewidth=0.6, alpha=0.4)
 
 
-def preprocess_from_binned(fv, config):
+def preprocess_from_binned(fv, config, pop_avg=None):
     """
     Convert pre-binned feature_vectors from diabeticRecords.pkl into a model input tensor.
 
@@ -361,12 +366,13 @@ def preprocess_from_binned(fv, config):
     Each element is a numpy array of shape (330,) covering 420–750 nm at 1 nm bins.
     """
     import torch as _torch
-    wl_range         = config.get('data', {}).get('wavelength_nm_range', [450, 650])
-    use_absorption   = config.get('data', {}).get('use_absorption', True)
-    use_signal_std   = config.get('data', {}).get('use_signal_std', True)
-    add_deriv        = config.get('spectral', {}).get('add_spectral_derivatives', False)
-    deriv_order      = int(config.get('spectral', {}).get('derivative_order', 1))
-    per_channel_norm = config.get('normalization', {}).get('per_channel_norm', False)
+    wl_range             = config.get('data', {}).get('wavelength_nm_range', [450, 650])
+    use_absorption       = config.get('data', {}).get('use_absorption', True)
+    use_signal_std       = config.get('data', {}).get('use_signal_std', True)
+    population_normalize = config.get('data', {}).get('population_normalize', False)
+    add_deriv            = config.get('spectral', {}).get('add_spectral_derivatives', False)
+    deriv_order          = int(config.get('spectral', {}).get('derivative_order', 1))
+    per_channel_norm     = config.get('normalization', {}).get('per_channel_norm', False)
 
     measure_b, measure_std_b = np.array(fv[0]), np.array(fv[1])
     dark_b,    dark_std_b    = np.array(fv[2]), np.array(fv[3])
@@ -394,9 +400,21 @@ def preprocess_from_binned(fv, config):
     if add_deriv:
         x = utils.add_spectral_derivatives(x, deriv_order)
 
+    x_pop_np = None
+    if population_normalize:
+        if pop_avg is None:
+            raise ValueError("population_normalize=True in config but no pop_avg was provided.")
+        eps = 1e-8
+        x_pop_np = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)
+
     x_tensor = _torch.from_numpy(x).double().to(_torch.device('cpu'))
     if per_channel_norm:
         x_tensor = utils.apply_per_channel_snv(x_tensor)
+
+    if x_pop_np is not None:
+        x_pop_tensor = _torch.from_numpy(x_pop_np).double().to(_torch.device('cpu'))
+        x_tensor = _torch.cat([x_tensor, x_pop_tensor], dim=1)
+
     return x_tensor
 
 
@@ -414,6 +432,11 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
+    avg_path = f'baseline{key}_average.npy'
+    pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
+    if pop_avg is not None:
+        print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
+
     print(f'Loading data:   {pkl_path}')
     with open(pkl_path, 'rb') as f:
         data = pickle.load(f)
@@ -425,7 +448,7 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
         try:
             ref_glucose = float(rec['glucose'])
             fv = rec['feature_vectors']
-            x  = preprocess_from_binned(fv, config)
+            x  = preprocess_from_binned(fv, config, pop_avg=pop_avg)
             mu, _ = utils.regression_inference(model, x)
             pairs.append((ref_glucose, float(mu.item())))
         except Exception:

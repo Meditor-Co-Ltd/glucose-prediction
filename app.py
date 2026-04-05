@@ -33,8 +33,9 @@ BASELINE_KEYS = [-1, 100, 120]
 
 
 logger.info("=== Starting model initialization ===")
-BASELINE_CONFIGS = {}
-BASELINE_MODELS  = {}
+BASELINE_CONFIGS   = {}
+BASELINE_MODELS    = {}
+BASELINE_POP_AVGS  = {}
 for b in BASELINE_KEYS:
     try:
         cfg = utils.load_config(f'baseline{b}_configuration.yaml')
@@ -44,6 +45,14 @@ for b in BASELINE_KEYS:
     except Exception as e:
         logger.error(f"baseline{b}: failed to load — {e}")
         logger.error(traceback.format_exc())
+
+    avg_path = f'baseline{b}_average.npy'
+    if os.path.exists(avg_path):
+        try:
+            BASELINE_POP_AVGS[b] = np.load(avg_path)
+            logger.info(f"baseline{b}: population average loaded  shape={BASELINE_POP_AVGS[b].shape}")
+        except Exception as e:
+            logger.warning(f"baseline{b}: could not load {avg_path} — {e}")
 
 IS_REGRESSION = (
     BASELINE_CONFIGS[-1].get('model', {}).get('num_classes', 1) == 1
@@ -102,7 +111,8 @@ def predict_from_json(data):
             return {"error": f"Model for baseline key {key} is not loaded."}, 500
 
         logger.info(f"Preprocessing data (baseline={baseline} → model key={key})...")
-        x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config)
+        pop_avg = BASELINE_POP_AVGS.get(key)
+        x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=pop_avg)
 
         logger.info("Running model inference...")
         if IS_REGRESSION:
