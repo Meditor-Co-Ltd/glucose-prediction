@@ -47,7 +47,7 @@ for b in BASELINE_KEYS:
         logger.error(f"baseline{b}: failed to load — {e}")
         logger.error(traceback.format_exc())
 
-    avg_path = f'baseline{b}_population_average.npy'
+    avg_path = f'baseline{b}_average.npy'
     if os.path.exists(avg_path):
         try:
             BASELINE_POP_AVGS[b] = np.load(avg_path)
