@@ -4,7 +4,7 @@ results_path: ./RESULTS/20260405_SPECFORMER_regression_baseline-1_range450_650_F
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: true
+  use_saved_model: false
 data:
   file: outlierRemovedAppendedRecords4.pkl
   wavelength_nm_range:
@@ -15,13 +15,13 @@ data:
   use_absorption_only: false
   use_signal_std: false
   normalize_labels: false
-  train_split: 0.8
-  val_split: 0.19
-  test_split: 0.01
+  train_split: 0.6
+  val_split: 0.3
+  test_split: 0.1
   baseline: -1
   diabetes_mode: -1
   population_normalize: true
-  population_average_path: ./RESULTS/20260405_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_average.npy
+  population_average_path: ./RESULTS/20260405_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_population_average.npy
 channels:
   num_base_channels: 4
   num_total_channels: 24
@@ -124,8 +124,8 @@ model:
   num_classes: 1
 training:
   optimizer: AdamW
-  learning_rate: 0.0001
-  learning_rate_finetune: 0.0005
+  learning_rate: 0.0002
+  learning_rate_finetune: 0.0001
   weight_decay: 1.0e-05
   max_grad_norm: 1.0
   batch_size: 300

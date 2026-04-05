@@ -87,7 +87,7 @@ def main():
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
-    avg_path = f'baseline{key}_average.npy'
+    avg_path = f'baseline{key}_population_average.npy'
     pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
     if pop_avg is not None:
         print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
@@ -432,7 +432,7 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
-    avg_path = f'baseline{key}_average.npy'
+    avg_path = f'baseline{key}_population_average.npy'
     pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
     if pop_avg is not None:
         print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
