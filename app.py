@@ -46,7 +46,13 @@ for b in BASELINE_KEYS:
         logger.error(f"baseline{b}: failed to load — {e}")
         logger.error(traceback.format_exc())
 
-    avg_path = f'baseline{b}_average.npy'
+    cfg = BASELINE_CONFIGS.get(b, {})
+    avg_path = cfg.get('data', {}).get('population_average_path', f'baseline{b}_average.npy')
+    # Normalise path separators so it works on Linux too
+    avg_path = avg_path.replace('\\', '/')
+    if not os.path.exists(avg_path):
+        # Fallback: look for the file by name in the working directory
+        avg_path = f'baseline{b}_average.npy'
     if os.path.exists(avg_path):
         try:
             BASELINE_POP_AVGS[b] = np.load(avg_path)

@@ -1,10 +1,10 @@
-training_date: '20260404'
+training_date: '20260405'
 version: v14
-results_path: ./RESULTS/20260404_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
+results_path: ./RESULTS/20260405_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: false
+  use_saved_model: true
 data:
   file: outlierRemovedAppendedRecords4.pkl
   wavelength_nm_range:
@@ -20,6 +20,8 @@ data:
   test_split: 0.01
   baseline: -1
   diabetes_mode: -1
+  population_normalize: true
+  population_average_path: ./RESULTS/20260405_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_average.npy
 channels:
   num_base_channels: 4
   num_total_channels: 24
