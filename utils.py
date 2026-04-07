@@ -251,7 +251,8 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg
     wl_range             = config.get('data', {}).get('wavelength_nm_range', [450, 650])
     use_absorption       = config.get('data', {}).get('use_absorption', True)
     use_signal_std       = config.get('data', {}).get('use_signal_std', True)
-    population_normalize = config.get('data', {}).get('population_normalize', False)
+    population_normalize      = config.get('data', {}).get('population_normalize', False)
+    population_normalize_only = config.get('data', {}).get('population_normalize_only', False)
     wl_start             = int(wl_range[0])
     wl_end               = int(wl_range[1])
     add_deriv            = config.get('spectral', {}).get('add_spectral_derivatives', False)
@@ -322,11 +323,15 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg
 
     # Step 6: population-normalize channels (computed pre-SNV, same as training)
     x_pop_np = None
-    if population_normalize:
+    if population_normalize or population_normalize_only:
         if pop_avg is None:
             raise ValueError("population_normalize=True in config but no pop_avg was provided.")
         eps = 1e-8
         x_pop_np = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)  # [1, C, W]
+
+    # Step 6b: population_normalize_only — return only pop channels, skip SNV entirely
+    if population_normalize_only and x_pop_np is not None:
+        return torch.from_numpy(x_pop_np).double().to(torch.device('cpu'))
 
     # Step 7: to double tensor
     x_tensor = torch.from_numpy(x).double().to(torch.device('cpu'))

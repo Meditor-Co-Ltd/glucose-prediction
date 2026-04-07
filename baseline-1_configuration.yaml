@@ -1,6 +1,6 @@
-training_date: '20260405'
+training_date: '20260407'
 version: v14
-results_path: ./RESULTS/20260405_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
+results_path: ./RESULTS/20260407_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
@@ -21,10 +21,11 @@ data:
   baseline: -1
   diabetes_mode: -1
   population_normalize: true
-  population_average_path: ./RESULTS/20260405_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_population_average.npy
+  population_normalize_only: true
+  population_average_path: ./RESULTS/20260407_SPECFORMER_regression_baseline-1_range450_650_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_population_average.npy
 channels:
   num_base_channels: 4
-  num_total_channels: 24
+  num_total_channels: 8
   channel_names:
   - measure
   - dark
@@ -42,24 +43,8 @@ channels:
   - norm_d1_dark
   - norm_d1_reference
   - norm_d1_absorption_sensor
-  penalized_channel_indices:
-  - 1
-  - 2
-  - 5
-  - 6
-  - 9
-  - 10
-  - 13
-  - 14
-  penalized_channel_names:
-  - dark
-  - reference
-  - d1_dark
-  - d1_reference
-  - norm_dark
-  - norm_reference
-  - norm_d1_dark
-  - norm_d1_reference
+  penalized_channel_indices: []
+  penalized_channel_names: []
 outlier_removal:
   remove_absorption_outliers: true
   outlier_threshold_std: 3
@@ -87,7 +72,7 @@ loss:
   huber_weight: 0.5
 gradient_penalty:
   gradient_penalty: 0.0
-  channel_gradient_penalty: true
+  channel_gradient_penalty: false
   base_penalty_weight: 0.001
   penalized_channel_weight: 0.002
   gradient_penalty_subsample: 32
@@ -119,7 +104,7 @@ model:
   dropout: 0.1
   spectral_dropout: 0
   conv_kernel_size: 15
-  num_inputs: 24
+  num_inputs: 8
   sequence_length: 200
   num_classes: 1
 training:
