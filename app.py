@@ -154,6 +154,16 @@ def predict_from_json(data):
                     logger.warning(f"Could not apply 5-min averaging: {e}")
 
             logger.info(f"Regression prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}, baseline_key={key}")
+
+            for label, alt_measure in [("measure2", measure2), ("measure3", measure3)]:
+                if len(alt_measure) > 0:
+                    try:
+                        x_alt = utils.preprocess_for_inference(alt_measure, reference, dark, cal_data, config, pop_avg=BASELINE_POP_AVGS.get(key))
+                        mu_alt, lv_alt = utils.regression_inference(mdl, x_alt)
+                        logger.info(f"Regression prediction ({label}): glucose={float(mu_alt.item()):.2f}, sigma={float(lv_alt.item()):.4f}")
+                    except Exception as e:
+                        logger.warning(f"Inference with {label} failed: {e}")
+
             return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25}
 
         return {"error": "Non-regression models are not supported in this configuration."}, 500
