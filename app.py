@@ -78,6 +78,8 @@ def predict_from_json(data):
             data = data[0]
 
         measure   = np.array(data.get("measure",   []))
+        measure2  = np.array(data.get("measure2",   []))
+        measure3  = np.array(data.get("measure3",   []))
         reference = np.array(data.get("reference", []))
         dark      = np.array(data.get("dark",      []))
         cal_data  = np.array(data.get("cal_data",  []))
@@ -97,9 +99,21 @@ def predict_from_json(data):
         logger.info(f"Incoming request keys: {list(data.keys())}")
         logger.info(f"Incoming request — baseline={baseline}, "
                     f"measure_len={len(measure)}, reference_len={len(reference)}, "
+                    f"measure2_len={len(measure2)}, reference_len={len(reference)}, "
+                    f"measure3_len={len(measure3)}, reference_len={len(reference)}, "
                     f"dark_len={len(dark)}, cal_data_len={len(cal_data)}, "
                     f"current_time={current_time_str}, "
                     f"last_glucose_values={last_glucose_values}")
+
+        for label, other in [("measure2", measure2), ("measure3", measure3)]:
+            if len(other) == len(measure) and len(measure) > 0:
+                denom = np.where(np.abs(measure) > 1e-9, np.abs(measure), 1e-9)
+                pct_diff = np.abs(other - measure) / denom * 100
+                max_idx = int(np.argmax(pct_diff))
+                logger.info(
+                    f"measure vs {label}: mean_pct_diff={pct_diff.mean():.2f}%, "
+                    f"max_pct_diff={pct_diff[max_idx]:.2f}% at idx={max_idx}"
+                )
 
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
