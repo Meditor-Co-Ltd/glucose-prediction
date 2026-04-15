@@ -6,8 +6,8 @@ import yaml
 
 def select_baseline_key(baseline_value: float) -> int:
     """Map a patient baseline glucose value to the appropriate model key."""
-    if baseline_value > 120:
-        return 120
+    if baseline_value >= 125:
+        return 125
     elif baseline_value > 100:
         return 100
     else:

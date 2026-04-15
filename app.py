@@ -8,8 +8,10 @@ import sys
 import traceback
 import utils
 
-AVERAGE_LAST_5MIN = False
-AVERAGE_WINDOW_MINUTES = 5
+AVERAGE_WINDOW_MINUTES = 2
+
+SCALE_FACTOR_100 = 1.2   # multiplicative scale for baseline 100–124
+SCALE_FACTOR_125 = 1.4   # multiplicative scale for baseline >= 125
 
 warnings.filterwarnings('ignore')
 
@@ -29,7 +31,7 @@ if __name__ != '__main__':
 
 
 # --- Multi-model setup: one model per baseline range ---
-BASELINE_KEYS = [-1, 100, 120]
+BASELINE_KEYS = [-1, 100, 125]
 
 
 logger.info("=== Starting model initialization ===")
@@ -118,52 +120,81 @@ def predict_from_json(data):
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
 
-        key    = utils.select_baseline_key(baseline)
-        config = BASELINE_CONFIGS.get(key)
-        mdl    = BASELINE_MODELS.get(key)
+        # Always use baseline-1 model
+        key     = -1
+        config  = BASELINE_CONFIGS.get(key)
+        mdl     = BASELINE_MODELS.get(key)
+        pop_avg = BASELINE_POP_AVGS.get(key)
 
         if config is None or mdl is None:
             return {"error": f"Model for baseline key {key} is not loaded."}, 500
 
-        logger.info(f"Preprocessing data (baseline={baseline} → model key={key})...")
-        x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=BASELINE_POP_AVGS.get(key))
+        logger.info(f"Preprocessing data (baseline={baseline}, always using model key={key})...")
 
-        logger.info("Running model inference...")
         if IS_REGRESSION:
-            mu, log_var = utils.regression_inference(mdl, x)
-            predicted_glucose = float(mu.item())
-            sigma_value       = float(log_var.item())
+            # Step 1: independent inference for each measure
+            glucose_preds = []
+            sigma_preds   = []
 
-            if AVERAGE_LAST_5MIN and current_time_str and isinstance(last_glucose_values, list) and last_glucose_values:
+            for label, meas in [("measure", measure), ("measure2", measure2), ("measure3", measure3)]:
+                if len(meas) == 0:
+                    logger.info(f"Skipping {label}: empty array")
+                    continue
+                try:
+                    x_i        = utils.preprocess_for_inference(meas, reference, dark, cal_data, config, pop_avg=pop_avg)
+                    mu_i, lv_i = utils.regression_inference(mdl, x_i)
+                    g_i        = float(mu_i.item())
+                    s_i        = float(lv_i.item())
+                    glucose_preds.append(g_i)
+                    sigma_preds.append(s_i)
+                    logger.info(f"Regression prediction ({label}): glucose={g_i:.2f}, sigma={s_i:.4f}")
+                except Exception as e:
+                    logger.warning(f"Inference with {label} failed: {e}")
+
+            if not glucose_preds:
+                return {"error": "All measure arrays are empty or inference failed."}, 500
+
+            predicted_glucose = sum(glucose_preds) / len(glucose_preds)
+            sigma_value       = sum(sigma_preds)   / len(sigma_preds)
+            logger.info(f"Individual outputs — " + ", ".join(
+                f"{lbl}={g:.2f}" for lbl, g in zip(["measure","measure2","measure3"], glucose_preds)
+            ))
+            logger.info(f"Averaged across {len(glucose_preds)} measure(s): glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}")
+
+            # Step 2: scale by baseline range
+            if 100 <= baseline < 125:
+                scale = SCALE_FACTOR_100
+                logger.info(f"Applying SCALE_FACTOR_100={scale} (baseline={baseline})")
+            elif baseline >= 125:
+                scale = SCALE_FACTOR_125
+                logger.info(f"Applying SCALE_FACTOR_125={scale} (baseline={baseline})")
+            else:
+                scale = 1.0
+            predicted_glucose *= scale
+
+            # Step 3: 2-minute rolling average with last_glucose_values
+            if current_time_str and isinstance(last_glucose_values, list) and last_glucose_values:
                 try:
                     current_dt = datetime.fromisoformat(current_time_str)
                     cutoff     = current_dt - timedelta(minutes=AVERAGE_WINDOW_MINUTES)
-                    recent = [
-                        entry["glucose"]
-                        for entry in last_glucose_values
+                    recent_entries = [
+                        entry for entry in last_glucose_values
                         if isinstance(entry, dict)
-                        and "timestamp" in entry
-                        and "glucose" in entry
+                        and "timestamp" in entry and "glucose" in entry
                         and datetime.fromisoformat(entry["timestamp"]) >= cutoff
                     ]
+                    recent = [e["glucose"] for e in recent_entries]
+                    logger.info(f"2-min window [{cutoff.isoformat()} → {current_dt.isoformat()}]: "
+                                f"{len(recent_entries)} entries — "
+                                + (", ".join(f"{e['timestamp']}={e['glucose']}" for e in recent_entries) or "none"))
                     if recent:
                         averaged = (predicted_glucose + sum(recent)) / (1 + len(recent))
-                        logger.info(f"Averaged with {len(recent)} recent values {recent} → {averaged:.2f}")
+                        logger.info(f"2-min average: current={predicted_glucose:.2f}, history={recent} → {averaged:.2f}")
                         predicted_glucose = averaged
                 except Exception as e:
-                    logger.warning(f"Could not apply 5-min averaging: {e}")
+                    logger.warning(f"Could not apply 2-min averaging: {e}")
 
-            logger.info(f"Regression prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}, baseline_key={key}")
-
-            for label, alt_measure in [("measure2", measure2), ("measure3", measure3)]:
-                if len(alt_measure) > 0:
-                    try:
-                        x_alt = utils.preprocess_for_inference(alt_measure, reference, dark, cal_data, config, pop_avg=BASELINE_POP_AVGS.get(key))
-                        mu_alt, lv_alt = utils.regression_inference(mdl, x_alt)
-                        logger.info(f"Regression prediction ({label}): glucose={float(mu_alt.item()):.2f}, sigma={float(lv_alt.item()):.4f}")
-                    except Exception as e:
-                        logger.warning(f"Inference with {label} failed: {e}")
-
+            logger.info(f"Final prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}, baseline_key={key}, baseline={baseline}")
             return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25}
 
         return {"error": "Non-regression models are not supported in this configuration."}, 500
