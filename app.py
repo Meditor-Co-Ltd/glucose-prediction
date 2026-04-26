@@ -31,7 +31,7 @@ if __name__ != '__main__':
 
 
 # --- Multi-model setup: one model per baseline range ---
-BASELINE_KEYS = [-1, 100, 125]
+BASELINE_KEYS = [-1]
 
 
 logger.info("=== Starting model initialization ===")
