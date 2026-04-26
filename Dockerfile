@@ -23,14 +23,9 @@ COPY app.py .
 COPY utils.py .
 COPY models.py .
 COPY baseline-1_configuration.yaml .
-COPY baseline-1_regression_model.pt .
+COPY baseline-1_regression_model.pth .
 COPY baseline-1_average.npy .
-COPY baseline100_configuration.yaml .
-COPY baseline100_regression_model.pt .
-COPY baseline100_average.npy .
-COPY baseline125_configuration.yaml .
-COPY baseline125_regression_model.pt .
-COPY baseline125_average.npy .
+
 
 # Скачиваем модель при сборке контейнера (опционально)
 # RUN python -c "

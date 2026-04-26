@@ -178,6 +178,36 @@ def wavelength_binning2(cal_data, measure, dark, reference, bin_size=1):
     )
 
 
+def wavelength_binning3(cal_data, measure, dark, reference, bin_size=3):
+    cal_data  = np.asarray(cal_data)
+    measure   = np.asarray(measure)
+    dark      = np.asarray(dark)
+    reference = np.asarray(reference)
+    eps = 1e-8
+    num = np.maximum(measure - dark, eps)
+    den = np.maximum(reference - dark, eps)
+    absorption = -np.log10(num / den)
+    measure_b, dark_b, reference_b = [], [], []
+    measure_b2, dark_b2, reference_b2 = [], [], []
+    absorption_b, absorption_b2 = [], []
+    for bin_start in range(450, 650, bin_size):
+        idx = np.argwhere((cal_data >= bin_start - bin_size) & (cal_data <= bin_start + bin_size))
+        measure_b.append(np.nanmean(measure[idx]))
+        dark_b.append(np.nanmean(dark[idx]))
+        reference_b.append(np.nanmean(reference[idx]))
+        measure_b2.append(np.nanstd(measure[idx]))
+        dark_b2.append(np.nanstd(dark[idx]))
+        reference_b2.append(np.nanstd(reference[idx]))
+        absorption_b.append(np.nanmean(absorption[idx]))
+        absorption_b2.append(np.nanstd(absorption[idx]))
+    return (
+        [np.hstack(measure_b)], [np.hstack(dark_b)], [np.hstack(reference_b)],
+        [np.hstack(absorption_b)],
+        [np.hstack(measure_b2)], [np.hstack(dark_b2)], [np.hstack(reference_b2)],
+        [np.hstack(absorption_b2)],
+    )
+
+
 def add_spectral_derivatives(x_np, derivative_order=1):
     """
     Append spectral derivative channels along axis=1.
@@ -216,136 +246,153 @@ def apply_per_channel_snv(x_tensor):
     return torch.cat([x_tensor, x_snv], dim=1)
 
 
-def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=None):
+def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=None, time_of_day=None):
     """
     Preprocess raw sensor data for model inference, driven by a YAML config dict.
 
-    Channel order (use_signal_std=False, default for v14):
-        0: measure, 1: dark, 2: reference, [3: absorption_computed  if use_absorption]
-        → 4 base channels → 8 after derivatives → 16 after SNV concat
-          [+8 population-normalize channels if population_normalize=True → 24 total]
-
-    Channel order (use_signal_std=True, legacy):
-        0: measure, 1: measure_std, 2: dark, 3: dark_std, 4: reference, 5: reference_std,
-        [6: absorption, 7: absorption_std  if use_absorption]
-        → 8 base channels → 16 after derivatives → 32 after SNV concat
-
-    Pipeline:
-        1. Wavelength binning (1nm bins, means + stds)
-        2. Stack channels -> [1, C, N_wl]
-        3. Filter to configured wavelength range
-        4. Append absorption channel if use_absorption=True
-        5. Add spectral derivatives if add_spectral_derivatives=True
-        6. Compute population-normalize channels if population_normalize=True and pop_avg given
-        7. Convert to torch.double tensor
-        8. Apply per-channel SNV + concat if per_channel_norm=True
-        9. Append population-normalize tensor if population_normalize=True
+    Supports two binning paths:
+      - wavelength_nm_range is None (v16): wavelength_binning3 → 67 bins (450-648nm, 3nm centres)
+      - wavelength_nm_range = [start, end] (v14): wavelength_binning at 1nm then crop
 
     Args:
-        pop_avg: numpy array [C, W] (training-set mean, post-derivatives); required when
-                 config has population_normalize=True. Ignored otherwise.
+        pop_avg:      numpy array [C, W] required when population_normalize=True in config
+        time_of_day:  fractional hour 0–24 (e.g. 14.5 = 14:30). Required when use_time=True.
+                      Defaults to 0.0 (midnight) if None and use_time=True.
 
     Returns:
-        torch.Tensor ready for model inference, e.g. [1, 16, 200] or [1, 32, 200]
+        torch.Tensor [1, num_inputs, seq_len] ready for model inference
     """
-    wl_range             = config.get('data', {}).get('wavelength_nm_range', [450, 650])
-    use_absorption       = config.get('data', {}).get('use_absorption', True)
-    use_signal_std       = config.get('data', {}).get('use_signal_std', True)
+    wl_range              = config.get('data', {}).get('wavelength_nm_range', [450, 650])
+    use_absorption        = config.get('data', {}).get('use_absorption', True)
+    use_signal_std        = config.get('data', {}).get('use_signal_std', True)
     population_normalize      = config.get('data', {}).get('population_normalize', False)
     population_normalize_only = config.get('data', {}).get('population_normalize_only', False)
-    wl_start             = int(wl_range[0])
-    wl_end               = int(wl_range[1])
-    add_deriv            = config.get('spectral', {}).get('add_spectral_derivatives', False)
-    deriv_order          = int(config.get('spectral', {}).get('derivative_order', 1))
-    per_channel_norm     = config.get('normalization', {}).get('per_channel_norm', False)
+    use_time              = config.get('data', {}).get('use_time', False)
+    add_deriv             = config.get('spectral', {}).get('add_spectral_derivatives', False)
+    deriv_order           = int(config.get('spectral', {}).get('derivative_order', 1))
+    per_channel_norm      = config.get('normalization', {}).get('per_channel_norm', False)
 
-    # Step 1: wavelength binning (means + stds)
-    measure_b, dark_b, reference_b, measure_std_b, dark_std_b, reference_std_b = wavelength_binning(
-        cal_data, measure, dark, reference, bin_size=1
-    )
-    measure_b       = np.array(measure_b[0])
-    dark_b          = np.array(dark_b[0])
-    reference_b     = np.array(reference_b[0])
-    measure_std_b   = np.array(measure_std_b[0])
-    dark_std_b      = np.array(dark_std_b[0])
-    reference_std_b = np.array(reference_std_b[0])
+    if wl_range is None:
+        # v16 path: wavelength_binning3 (bin_size=3, 450-648nm → 67 bins)
+        # absorption is pre-computed from raw pixels before binning (matches training)
+        (measure_b_l, dark_b_l, reference_b_l, absorption_b_l,
+         measure_std_l, dark_std_l, reference_std_l, absorption_std_l) = \
+            wavelength_binning3(cal_data, measure, dark, reference, bin_size=3)
+        measure_b        = np.array(measure_b_l[0])
+        dark_b           = np.array(dark_b_l[0])
+        reference_b      = np.array(reference_b_l[0])
+        absorption_b     = np.array(absorption_b_l[0])
+        measure_std_b    = np.array(measure_std_l[0])
+        dark_std_b       = np.array(dark_std_l[0])
+        reference_std_b  = np.array(reference_std_l[0])
+        absorption_std_b = np.array(absorption_std_l[0])
 
-    # Step 2: stack channels
-    # With stds: [measure, measure_std, dark, dark_std, reference, reference_std] -> [1, 6, N_wl]
-    # Without:   [measure, dark, reference]                                        -> [1, 3, N_wl]
-    if use_signal_std:
-        x = np.stack([measure_b, measure_std_b, dark_b, dark_std_b, reference_b, reference_std_b], axis=0)
-    else:
-        x = np.stack([measure_b, dark_b, reference_b], axis=0)
-    x = np.expand_dims(x, axis=0)
-
-    # Step 3: wavelength range filter
-    start_idx = int(wl_start - 420)
-    end_idx   = int(wl_end - 420)
-    if start_idx < 0 or end_idx > x.shape[2] or start_idx >= end_idx:
-        raise ValueError(f"Invalid wavelength range ({wl_start}, {wl_end}). Must be within 420-750nm.")
-    x = x[:, :, start_idx:end_idx]
-
-    # Step 4: absorption channel
-    # With stds: channels are 0=measure, 1=measure_std, 2=dark, 3=dark_std, 4=reference, 5=reference_std
-    # Without:   channels are 0=measure, 1=dark, 2=reference
-    if use_absorption:
-        eps = 1e-8
         if use_signal_std:
-            m, sigma_m = x[:, 0, :], x[:, 1, :]
-            d, sigma_d = x[:, 2, :], x[:, 3, :]
-            r, sigma_r = x[:, 4, :], x[:, 5, :]
+            x = np.stack([measure_b, measure_std_b, dark_b, dark_std_b,
+                          reference_b, reference_std_b], axis=0)
         else:
-            m, d, r = x[:, 0, :], x[:, 1, :], x[:, 2, :]
-            sigma_m = sigma_d = sigma_r = np.zeros_like(m)
+            x = np.stack([measure_b, dark_b, reference_b], axis=0)
+        x = np.expand_dims(x, axis=0)  # [1, C, 67]
 
-        num = np.maximum(m - d, eps)
-        den = np.maximum(r - d, eps)
-        absorption = -np.log10(num / den)
-        absorption = np.expand_dims(absorption, axis=1)
-        x = np.concatenate([x, absorption], axis=1)
+        if use_absorption:
+            ab = absorption_b[np.newaxis, np.newaxis, :]
+            x  = np.concatenate([x, ab], axis=1)
+            if use_signal_std:
+                abs_std = absorption_std_b[np.newaxis, np.newaxis, :]
+                x = np.concatenate([x, abs_std], axis=1)
+    else:
+        # v14 path: 1nm binning then wavelength-range crop
+        wl_start = int(wl_range[0])
+        wl_end   = int(wl_range[1])
+
+        measure_b, dark_b, reference_b, measure_std_b, dark_std_b, reference_std_b = wavelength_binning(
+            cal_data, measure, dark, reference, bin_size=1
+        )
+        measure_b       = np.array(measure_b[0])
+        dark_b          = np.array(dark_b[0])
+        reference_b     = np.array(reference_b[0])
+        measure_std_b   = np.array(measure_std_b[0])
+        dark_std_b      = np.array(dark_std_b[0])
+        reference_std_b = np.array(reference_std_b[0])
 
         if use_signal_std:
-            # Absorption std via error propagation:
-            # absorption = -log10(num/den), num = m-d, den = r-d
-            ln10 = np.log(10)
-            abs_std = np.sqrt(
-                (sigma_m / (num * ln10)) ** 2 +
-                ((den - num) * sigma_d / (num * den * ln10)) ** 2 +
-                (sigma_r / (den * ln10)) ** 2
-            )
-            abs_std = np.expand_dims(abs_std, axis=1)
-            x = np.concatenate([x, abs_std], axis=1)
+            x = np.stack([measure_b, measure_std_b, dark_b, dark_std_b,
+                          reference_b, reference_std_b], axis=0)
+        else:
+            x = np.stack([measure_b, dark_b, reference_b], axis=0)
+        x = np.expand_dims(x, axis=0)
 
-    # Step 5: spectral derivatives
+        start_idx = int(wl_start - 420)
+        end_idx   = int(wl_end   - 420)
+        if start_idx < 0 or end_idx > x.shape[2] or start_idx >= end_idx:
+            raise ValueError(f"Invalid wavelength range ({wl_start}, {wl_end}). Must be within 420-750nm.")
+        x = x[:, :, start_idx:end_idx]
+
+        if use_absorption:
+            eps = 1e-8
+            if use_signal_std:
+                m, sigma_m = x[:, 0, :], x[:, 1, :]
+                d, sigma_d = x[:, 2, :], x[:, 3, :]
+                r, sigma_r = x[:, 4, :], x[:, 5, :]
+            else:
+                m, d, r = x[:, 0, :], x[:, 1, :], x[:, 2, :]
+                sigma_m = sigma_d = sigma_r = np.zeros_like(m)
+
+            num = np.maximum(m - d, eps)
+            den = np.maximum(r - d, eps)
+            absorption = np.expand_dims(-np.log10(num / den), axis=1)
+            x = np.concatenate([x, absorption], axis=1)
+
+            if use_signal_std:
+                ln10 = np.log(10)
+                abs_std = np.sqrt(
+                    (sigma_m / (num * ln10)) ** 2 +
+                    ((den - num) * sigma_d / (num * den * ln10)) ** 2 +
+                    (sigma_r / (den * ln10)) ** 2
+                )
+                x = np.concatenate([x, np.expand_dims(abs_std, axis=1)], axis=1)
+
+    # Spectral derivatives
     if add_deriv:
         x = add_spectral_derivatives(x, deriv_order)
 
-    # Step 6: population-normalize channels (computed pre-SNV, same as training)
+    # Population-normalize channels (pre-SNV, same as training)
     x_pop_np = None
     if population_normalize or population_normalize_only:
         if pop_avg is None:
             raise ValueError("population_normalize=True in config but no pop_avg was provided.")
         eps = 1e-8
-        x_pop_np = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)  # [1, C, W]
+        x_pop_np = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)
 
-    # Step 6b: population_normalize_only — return only pop channels, skip SNV entirely
+    # population_normalize_only: skip SNV, return only pop + optional time channels
     if population_normalize_only and x_pop_np is not None:
-        return torch.from_numpy(x_pop_np).double().to(torch.device('cpu'))
+        x_pop_tensor = torch.from_numpy(x_pop_np).double().to(torch.device('cpu'))
+        if use_time:
+            tc_tensor = _encode_time_channels(time_of_day, x_pop_np.shape[2])
+            return torch.cat([x_pop_tensor, tc_tensor], dim=1)
+        return x_pop_tensor
 
-    # Step 7: to double tensor
+    # Normal path: SNV → append pop → append time
     x_tensor = torch.from_numpy(x).double().to(torch.device('cpu'))
-
-    # Step 8: per-channel SNV + concat
     if per_channel_norm:
         x_tensor = apply_per_channel_snv(x_tensor)
-
-    # Step 9: append population-normalize tensor
     if x_pop_np is not None:
         x_pop_tensor = torch.from_numpy(x_pop_np).double().to(torch.device('cpu'))
         x_tensor = torch.cat([x_tensor, x_pop_tensor], dim=1)
+    if use_time:
+        tc_tensor = _encode_time_channels(time_of_day, x_tensor.shape[2])
+        x_tensor  = torch.cat([x_tensor, tc_tensor], dim=1)
 
     return x_tensor
+
+
+def _encode_time_channels(time_of_day, seq_len):
+    """Return [1, 2, seq_len] double tensor: [sin, cos] of fractional hour broadcast across wavelengths."""
+    angle = 2 * np.pi * (float(time_of_day or 0.0) / 24.0)
+    tc    = np.zeros((1, 2, seq_len), dtype=np.float64)
+    tc[0, 0, :] = np.sin(angle)
+    tc[0, 1, :] = np.cos(angle)
+    return torch.from_numpy(tc).double().to(torch.device('cpu'))
 
 
 def regression_inference(model, x):

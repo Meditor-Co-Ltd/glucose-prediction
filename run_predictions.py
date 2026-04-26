@@ -2,19 +2,15 @@
 run_predictions.py — batch inference on a JSON data file, or Clarke EGA on a pkl file.
 
 Usage:
-    python run_predictions.py                              # alex_last500.json, last 2 months, baseline-1 model
+    python run_predictions.py                              # alex_last500.json, last 2 months
     python run_predictions.py --file my_data.json
-    python run_predictions.py --file my_data.json --baseline 120
     python run_predictions.py --file my_data.json --months 3
     python run_predictions.py --file my_data.json --all    # no date filter
     python run_predictions.py --no-plot                    # skip histogram
     python run_predictions.py --clarke                     # Clarke EGA on diabeticRecords.pkl
     python run_predictions.py --clarke --pkl path/to/data.pkl
 
-Baseline routing (matches app.py):
-    ≤ 100  → baseline-1  (BandEnsemble, non-diabetic / low baseline)
-    101-120 → baseline100
-    > 120  → baseline120
+Always uses baseline-1 model with population normalisation.
 """
 
 import argparse
@@ -76,18 +72,18 @@ def main():
         run_clarke(args.pkl, baseline=args.baseline, no_plot=args.no_plot, output=args.output)
         return
 
-    # --- Select model based on baseline ---
-    key         = utils.select_baseline_key(args.baseline)
-    config_file = f'baseline{key}_configuration.yaml'
-    model_file  = f'baseline{key}_regression_model.pt'
+    # Always use baseline-1 model
+    key         = -1
+    config_file = 'baseline-1_configuration.yaml'
+    model_file  = 'baseline-1_regression_model.pt'
 
-    print(f'Baseline:       {args.baseline} → using baseline{key} model')
+    print(f'Baseline:       {args.baseline} → using baseline-1 model')
     print(f'Loading config: {config_file}')
     config = utils.load_config(config_file)
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
-    avg_path = f'baseline{key}_population_average.npy'
+    avg_path = 'baseline-1_average.npy'
     pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
     if pop_avg is not None:
         print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
@@ -132,7 +128,14 @@ def main():
             dark      = np.array(parse_field(r['dark']),       dtype=float)
             cal_data  = np.array(parse_field(r['cal_data']),   dtype=float)
 
-            x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=pop_avg)
+            time_of_day = None
+            try:
+                _t = parse_dt(r.get('created_at', ''))
+                time_of_day = _t.hour + _t.minute / 60.0 + _t.second / 3600.0
+            except Exception:
+                pass
+
+            x = utils.preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg=pop_avg, time_of_day=time_of_day)
             mu, log_var = utils.regression_inference(model, x)
 
             g = float(mu.item())
@@ -357,26 +360,28 @@ def draw_clarke_ega_boundaries(ax):
     ax.axhline(180, color='gray', linewidth=0.6, alpha=0.4)
 
 
-def preprocess_from_binned(fv, config, pop_avg=None):
+def preprocess_from_binned(fv, config, pop_avg=None, time_of_day=None):
     """
-    Convert pre-binned feature_vectors from diabeticRecords.pkl into a model input tensor.
+    Convert pre-binned feature_vectors (allRecords6.pkl / diabeticRecords.pkl) into a model tensor.
 
-    feature_vectors order (from generate_training_data_diabetic.py):
-        [measure, measure_std, dark, dark_std, reference, reference_std, absorption, absorption_std]
-    Each element is a numpy array of shape (330,) covering 420–750 nm at 1 nm bins.
+    feature_vectors order:
+        [measure(67), measure_std(67), dark(67), dark_std(67),
+         reference(67), reference_std(67), absorption(67), absorption_std(67)]
     """
     import torch as _torch
-    wl_range             = config.get('data', {}).get('wavelength_nm_range', [450, 650])
-    use_absorption       = config.get('data', {}).get('use_absorption', True)
-    use_signal_std       = config.get('data', {}).get('use_signal_std', True)
-    population_normalize = config.get('data', {}).get('population_normalize', False)
-    add_deriv            = config.get('spectral', {}).get('add_spectral_derivatives', False)
-    deriv_order          = int(config.get('spectral', {}).get('derivative_order', 1))
-    per_channel_norm     = config.get('normalization', {}).get('per_channel_norm', False)
+    wl_range              = config.get('data', {}).get('wavelength_nm_range', [450, 650])
+    use_absorption        = config.get('data', {}).get('use_absorption', True)
+    use_signal_std        = config.get('data', {}).get('use_signal_std', True)
+    population_normalize      = config.get('data', {}).get('population_normalize', False)
+    population_normalize_only = config.get('data', {}).get('population_normalize_only', False)
+    use_time              = config.get('data', {}).get('use_time', False)
+    add_deriv             = config.get('spectral', {}).get('add_spectral_derivatives', False)
+    deriv_order           = int(config.get('spectral', {}).get('derivative_order', 1))
+    per_channel_norm      = config.get('normalization', {}).get('per_channel_norm', False)
 
-    measure_b, measure_std_b = np.array(fv[0]), np.array(fv[1])
-    dark_b,    dark_std_b    = np.array(fv[2]), np.array(fv[3])
-    reference_b, reference_std_b = np.array(fv[4]), np.array(fv[5])
+    measure_b, measure_std_b       = np.array(fv[0]), np.array(fv[1])
+    dark_b,    dark_std_b          = np.array(fv[2]), np.array(fv[3])
+    reference_b, reference_std_b   = np.array(fv[4]), np.array(fv[5])
     absorption_b, absorption_std_b = np.array(fv[6]), np.array(fv[7])
 
     if use_signal_std:
@@ -384,28 +389,43 @@ def preprocess_from_binned(fv, config, pop_avg=None):
                       reference_b, reference_std_b], axis=0)
     else:
         x = np.stack([measure_b, dark_b, reference_b], axis=0)
-    x = np.expand_dims(x, axis=0)  # [1, C, 330]
+    x = np.expand_dims(x, axis=0)  # [1, C, N]
 
-    start_idx = int(wl_range[0]) - 420
-    end_idx   = int(wl_range[1]) - 420
-    x = x[:, :, start_idx:end_idx]
+    if wl_range is not None:
+        start_idx = int(wl_range[0]) - 420
+        end_idx   = int(wl_range[1]) - 420
+        x = x[:, :, start_idx:end_idx]
+        absorption_b     = absorption_b[start_idx:end_idx]
+        absorption_std_b = absorption_std_b[start_idx:end_idx]
 
     if use_absorption:
-        ab = absorption_b[start_idx:end_idx][np.newaxis, np.newaxis, :]  # [1,1,N]
-        x = np.concatenate([x, ab], axis=1)
+        ab = absorption_b[np.newaxis, np.newaxis, :]
+        x  = np.concatenate([x, ab], axis=1)
         if use_signal_std:
-            ab_std = absorption_std_b[start_idx:end_idx][np.newaxis, np.newaxis, :]
-            x = np.concatenate([x, ab_std], axis=1)
+            x = np.concatenate([x, absorption_std_b[np.newaxis, np.newaxis, :]], axis=1)
 
     if add_deriv:
         x = utils.add_spectral_derivatives(x, deriv_order)
 
     x_pop_np = None
-    if population_normalize:
+    if population_normalize or population_normalize_only:
         if pop_avg is None:
             raise ValueError("population_normalize=True in config but no pop_avg was provided.")
         eps = 1e-8
         x_pop_np = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)
+
+    if population_normalize_only and x_pop_np is not None:
+        x_pop_tensor = _torch.from_numpy(x_pop_np).double().to(_torch.device('cpu'))
+        if use_time:
+            import math
+            angle = 2 * math.pi * (float(time_of_day or 0.0) / 24.0)
+            seq_len = x_pop_np.shape[2]
+            tc = np.zeros((1, 2, seq_len), dtype=np.float64)
+            tc[0, 0, :] = math.sin(angle)
+            tc[0, 1, :] = math.cos(angle)
+            tc_tensor = _torch.from_numpy(tc).double().to(_torch.device('cpu'))
+            return _torch.cat([x_pop_tensor, tc_tensor], dim=1)
+        return x_pop_tensor
 
     x_tensor = _torch.from_numpy(x).double().to(_torch.device('cpu'))
     if per_channel_norm:
@@ -415,6 +435,16 @@ def preprocess_from_binned(fv, config, pop_avg=None):
         x_pop_tensor = _torch.from_numpy(x_pop_np).double().to(_torch.device('cpu'))
         x_tensor = _torch.cat([x_tensor, x_pop_tensor], dim=1)
 
+    if use_time:
+        import math
+        angle   = 2 * math.pi * (float(time_of_day or 0.0) / 24.0)
+        seq_len = x_tensor.shape[2]
+        tc = np.zeros((1, 2, seq_len), dtype=np.float64)
+        tc[0, 0, :] = math.sin(angle)
+        tc[0, 1, :] = math.cos(angle)
+        tc_tensor = _torch.from_numpy(tc).double().to(_torch.device('cpu'))
+        x_tensor  = _torch.cat([x_tensor, tc_tensor], dim=1)
+
     return x_tensor
 
 
@@ -422,17 +452,17 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
     """Load diabeticRecords.pkl, run inference, and draw Clarke EGA."""
     import pickle
 
-    key         = utils.select_baseline_key(baseline)
-    config_file = f'baseline{key}_configuration.yaml'
-    model_file  = f'baseline{key}_regression_model.pt'
+    key         = -1
+    config_file = 'baseline-1_configuration.yaml'
+    model_file  = 'baseline-1_regression_model.pt'
 
-    print(f'Baseline:       {baseline} → using baseline{key} model')
+    print(f'Baseline:       {baseline} → using baseline-1 model')
     print(f'Loading config: {config_file}')
     config = utils.load_config(config_file)
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
-    avg_path = f'baseline{key}_population_average.npy'
+    avg_path = 'baseline-1_average.npy'
     pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
     if pop_avg is not None:
         print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
@@ -448,7 +478,8 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
         try:
             ref_glucose = float(rec['glucose'])
             fv = rec['feature_vectors']
-            x  = preprocess_from_binned(fv, config, pop_avg=pop_avg)
+            time_of_day = float(rec.get('time', 0.0) or 0.0)
+            x  = preprocess_from_binned(fv, config, pop_avg=pop_avg, time_of_day=time_of_day)
             mu, _ = utils.regression_inference(model, x)
             pairs.append((ref_glucose, float(mu.item())))
         except Exception:

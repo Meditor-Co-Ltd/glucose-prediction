@@ -98,6 +98,14 @@ def predict_from_json(data):
         last_glucose_values = data.get("last_glucose_values") or []
         current_time_str    = data.get("current_time", None)
 
+        time_of_day = None
+        if current_time_str:
+            try:
+                _cdt = datetime.fromisoformat(current_time_str)
+                time_of_day = _cdt.hour + _cdt.minute / 60.0 + _cdt.second / 3600.0
+            except Exception:
+                pass
+
         logger.info(f"Incoming request keys: {list(data.keys())}")
         logger.info(f"Incoming request — baseline={baseline}, "
                     f"measure_len={len(measure)}, reference_len={len(reference)}, "
@@ -141,7 +149,7 @@ def predict_from_json(data):
                     logger.info(f"Skipping {label}: empty array")
                     continue
                 try:
-                    x_i        = utils.preprocess_for_inference(meas, reference, dark, cal_data, config, pop_avg=pop_avg)
+                    x_i        = utils.preprocess_for_inference(meas, reference, dark, cal_data, config, pop_avg=pop_avg, time_of_day=time_of_day)
                     mu_i, lv_i = utils.regression_inference(mdl, x_i)
                     g_i        = float(mu_i.item())
                     s_i        = float(lv_i.item())
