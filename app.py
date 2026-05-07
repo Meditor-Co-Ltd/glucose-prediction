@@ -149,6 +149,7 @@ def predict_from_json(data):
                     logger.info(f"Skipping {label}: empty array")
                     continue
                 try:
+                    logger.info(f"CURRENT TIME={time_of_day}")
                     x_i        = utils.preprocess_for_inference(meas, reference, dark, cal_data, config, pop_avg=pop_avg, time_of_day=time_of_day)
                     mu_i, lv_i = utils.regression_inference(mdl, x_i)
                     g_i        = float(mu_i.item())
