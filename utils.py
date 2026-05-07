@@ -104,6 +104,7 @@ def load_model(path, config=None):
                 f"Cannot reconstruct model from state dict '{path}': config must be provided."
             )
         model = _build_model_from_config(config)
+        model.double()
         model.load_state_dict(checkpoint)
     else:
         model = checkpoint
