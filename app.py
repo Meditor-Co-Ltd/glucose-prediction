@@ -128,6 +128,7 @@ def predict_from_json(data):
         if len(measure) == 0 or len(reference) == 0 or len(dark) == 0 or len(cal_data) == 0:
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
 
+
         # Always use baseline-1 model
         key     = -1
         config  = BASELINE_CONFIGS.get(key)
