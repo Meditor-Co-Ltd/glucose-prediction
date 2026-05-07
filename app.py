@@ -164,12 +164,10 @@ def predict_from_json(data):
 
             predicted_glucose = sum(glucose_preds) / len(glucose_preds)
             sigma_value       = sum(sigma_preds)   / len(sigma_preds)
-            logger.info("\n---------------------------------------------------------------------------")
-            logger.info(f"Individual outputs — " + ", ".join(
+            logger.info(f"INDIVIDUAL OUTPUTS — " + ", ".join(
                 f"{lbl}: glucose={g:.2f}, sigma={s:.4f}" for lbl, g, s in zip(["measure","measure2","measure3"], glucose_preds, sigma_preds)
             ))
-            logger.info(f"Averaged across {len(glucose_preds)} measure(s): glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}")
-            logger.info("---------------------------------------------------------------------------\n")
+            logger.info(f"AVERAGED across {len(glucose_preds)} measure(s): glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}")
 
             # Step 2: scale by baseline range
             if 100 <= baseline < 125:
