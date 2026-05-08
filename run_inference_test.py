@@ -5,9 +5,10 @@ Loads the model/config exactly as app.py does on Railway, then runs 1000
 predictions against real records from the pkl file referenced in config and
 plots the results.
 
-Pre-binned pkl records are used as-is (their feature_vectors are the output
-of the same wavelength_binning3 used in the Railway pipeline), so everything
-downstream of the binning step is exercised identically.
+Uses utils.preprocess_binned_for_inference() which mirrors the post-binning
+steps of utils.preprocess_for_inference() used in production. The pkl's
+pre-binned feature_vectors (8, 67) feed directly into the same preprocessing
+path that Railway uses after wavelength_binning3.
 
 Usage (from the backend folder):
     python run_inference_test.py
@@ -22,7 +23,6 @@ import pickle
 import random
 
 import numpy as np
-import torch
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
@@ -52,8 +52,11 @@ model = utils.load_model(args.model, cfg)
 model.eval()
 
 print("Loading population average …")
-pop_avg = np.load(args.pop_avg)
-print(f"  pop_avg shape: {pop_avg.shape}")
+pop_avg = np.load(args.pop_avg) if os.path.exists(args.pop_avg) else None
+if pop_avg is not None:
+    print(f"  pop_avg shape: {pop_avg.shape}")
+else:
+    print("  pop_avg not found — skipping population normalization")
 
 # ── Locate pkl data ───────────────────────────────────────────────────────────
 pkl_path = args.pkl
@@ -76,67 +79,6 @@ with open(pkl_path, 'rb') as f:
     records = pickle.load(f)
 print(f"  {len(records)} records total")
 
-# ── Pull config flags (mirrors preprocess_for_inference) ────────────────────
-use_signal_std   = cfg['data'].get('use_signal_std', False)
-use_absorption   = cfg['data'].get('use_absorption', True)
-pop_norm_only    = cfg['data'].get('population_normalize_only', False)
-pop_norm         = cfg['data'].get('population_normalize', False)
-use_time         = cfg['data'].get('use_time', False)
-add_deriv        = cfg['spectral'].get('add_spectral_derivatives', False)
-deriv_order      = int(cfg['spectral'].get('derivative_order', 1))
-
-# ── Preprocess a single record (mirrors v16 path in preprocess_for_inference) ─
-#
-# pkl feature_vectors layout (from generate_training_data2.py / wavelength_binning3):
-#   [0] measure_b   [1] measure_std_b   [2] dark_b     [3] dark_std_b
-#   [4] reference_b [5] reference_std_b [6] absorption_b [7] absorption_std_b
-#
-# This is exactly the output of wavelength_binning3, so we start from here
-# and follow the identical downstream steps as preprocess_for_inference.
-def preprocess_record(feat, time_of_day):
-    """feat: np.ndarray shape (8, 67)"""
-    if use_signal_std:
-        x = np.stack([feat[0], feat[1], feat[2], feat[3], feat[4], feat[5]], axis=0)
-    else:
-        x = np.stack([feat[0], feat[2], feat[4]], axis=0)   # measure, dark, reference
-    x = x[np.newaxis]                                        # [1, C, 67]
-
-    if use_absorption:
-        x = np.concatenate([x, feat[6][np.newaxis, np.newaxis]], axis=1)
-        if use_signal_std:
-            x = np.concatenate([x, feat[7][np.newaxis, np.newaxis]], axis=1)
-
-    if add_deriv:
-        x = utils.add_spectral_derivatives(x, deriv_order)
-
-    eps = 1e-8
-    if pop_norm or pop_norm_only:
-        x_pop = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)
-        if pop_norm_only:
-            x_pop_t = torch.from_numpy(x_pop).double()
-            if use_time:
-                angle = 2 * np.pi * (float(time_of_day or 0.0) / 24.0)
-                tc = np.zeros((1, 2, x_pop.shape[2]), dtype=np.float64)
-                tc[0, 0] = np.sin(angle)
-                tc[0, 1] = np.cos(angle)
-                tc_t = torch.from_numpy(tc).double()
-                return torch.cat([x_pop_t, tc_t], dim=1)
-            return x_pop_t
-
-    x_t = torch.from_numpy(x).double()
-    if cfg['normalization'].get('per_channel_norm', False):
-        x_t = utils.apply_per_channel_snv(x_t)
-    if pop_norm:
-        x_pop_t = torch.from_numpy(x_pop).double()
-        x_t = torch.cat([x_t, x_pop_t], dim=1)
-    if use_time:
-        angle = 2 * np.pi * (float(time_of_day or 0.0) / 24.0)
-        tc = np.zeros((1, 2, x_t.shape[2]), dtype=np.float64)
-        tc[0, 0] = np.sin(angle)
-        tc[0, 1] = np.cos(angle)
-        x_t = torch.cat([x_t, torch.from_numpy(tc).double()], dim=1)
-    return x_t
-
 # ── Run predictions ───────────────────────────────────────────────────────────
 sample = random.sample(records, min(args.n, len(records)))
 
@@ -145,12 +87,12 @@ skipped = 0
 
 for rec in sample:
     try:
-        feat = np.array(rec['feature_vectors'])   # (8, 67)
-        glucose = float(rec['glucose'])
+        feat        = np.array(rec['feature_vectors'])   # (8, 67)
+        glucose     = float(rec['glucose'])
         time_of_day = rec.get('time', None)
 
-        x = preprocess_record(feat, time_of_day)
-        mu, lv = utils.regression_inference(model, x)
+        x        = utils.preprocess_binned_for_inference(feat, cfg, pop_avg=pop_avg, time_of_day=time_of_day)
+        mu, lv   = utils.regression_inference(model, x)
         preds.append(float(mu.item()))
         actuals.append(glucose)
         sigmas.append(float(lv.item()))

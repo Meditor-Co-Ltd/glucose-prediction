@@ -396,6 +396,65 @@ def _encode_time_channels(time_of_day, seq_len):
     return torch.from_numpy(tc).double().to(torch.device('cpu'))
 
 
+def preprocess_binned_for_inference(feat, config, pop_avg=None, time_of_day=None):
+    """
+    Preprocess pre-binned feature_vectors (8, 67) from pkl for inference.
+    Mirrors preprocess_for_inference() after the wavelength_binning3 step.
+    feat layout: [measure_b, measure_std_b, dark_b, dark_std_b,
+                  reference_b, reference_std_b, absorption_b, absorption_std_b]
+    """
+    use_absorption            = config.get('data', {}).get('use_absorption', True)
+    use_signal_std            = config.get('data', {}).get('use_signal_std', True)
+    population_normalize      = config.get('data', {}).get('population_normalize', False)
+    population_normalize_only = config.get('data', {}).get('population_normalize_only', False)
+    use_time                  = config.get('data', {}).get('use_time', False)
+    add_deriv                 = config.get('spectral', {}).get('add_spectral_derivatives', False)
+    deriv_order               = int(config.get('spectral', {}).get('derivative_order', 1))
+    per_channel_norm          = config.get('normalization', {}).get('per_channel_norm', False)
+
+    feat = np.asarray(feat)  # ensure (8, 67)
+
+    if use_signal_std:
+        x = np.stack([feat[0], feat[1], feat[2], feat[3], feat[4], feat[5]], axis=0)
+    else:
+        x = np.stack([feat[0], feat[2], feat[4]], axis=0)
+    x = np.expand_dims(x, axis=0)  # [1, C, 67]
+
+    if use_absorption:
+        x = np.concatenate([x, feat[6][np.newaxis, np.newaxis]], axis=1)
+        if use_signal_std:
+            x = np.concatenate([x, feat[7][np.newaxis, np.newaxis]], axis=1)
+
+    if add_deriv:
+        x = add_spectral_derivatives(x, deriv_order)
+
+    x_pop_np = None
+    if population_normalize or population_normalize_only:
+        if pop_avg is None:
+            raise ValueError("population_normalize=True but no pop_avg provided.")
+        eps = 1e-8
+        x_pop_np = (x - pop_avg[np.newaxis]) / (np.abs(pop_avg[np.newaxis]) + eps)
+
+    if population_normalize_only and x_pop_np is not None:
+        x_pop_tensor = torch.from_numpy(x_pop_np).double()
+        if use_time:
+            tc_tensor = _encode_time_channels(time_of_day, x_pop_np.shape[2])
+            return torch.cat([x_pop_tensor, tc_tensor], dim=1)
+        return x_pop_tensor
+
+    x_tensor = torch.from_numpy(x).double()
+    if per_channel_norm:
+        x_tensor = apply_per_channel_snv(x_tensor)
+    if x_pop_np is not None:
+        x_pop_tensor = torch.from_numpy(x_pop_np).double()
+        x_tensor = torch.cat([x_tensor, x_pop_tensor], dim=1)
+    if use_time:
+        tc_tensor = _encode_time_channels(time_of_day, x_tensor.shape[2])
+        x_tensor = torch.cat([x_tensor, tc_tensor], dim=1)
+
+    return x_tensor
+
+
 def regression_inference(model, x):
     """
     Run inference with a probabilistic regression model.
