@@ -31,7 +31,7 @@ if __name__ != '__main__':
 
 
 # --- Multi-model setup: one model per baseline range ---
-BASELINE_KEYS = [-1]
+BASELINE_KEYS = [-1, 80]
 
 
 logger.info("=== Starting model initialization ===")
@@ -49,13 +49,14 @@ for b in BASELINE_KEYS:
         logger.error(f"baseline{b}: failed to load — {e}")
         logger.error(traceback.format_exc())
 
-    avg_path = f'baseline{b}_average.npy'
-    if os.path.exists(avg_path):
-        try:
-            BASELINE_POP_AVGS[b] = np.load(avg_path)
-            logger.info(f"baseline{b}: population average loaded  shape={BASELINE_POP_AVGS[b].shape}")
-        except Exception as e:
-            logger.warning(f"baseline{b}: could not load {avg_path} — {e}")
+    for avg_path in [f'baseline{b}_average.npy', f'baseline{b}_population_average.npy']:
+        if os.path.exists(avg_path):
+            try:
+                BASELINE_POP_AVGS[b] = np.load(avg_path)
+                logger.info(f"baseline{b}: population average loaded from {avg_path}  shape={BASELINE_POP_AVGS[b].shape}")
+            except Exception as e:
+                logger.warning(f"baseline{b}: could not load {avg_path} — {e}")
+            break
 
 IS_REGRESSION = (
     BASELINE_CONFIGS[-1].get('model', {}).get('num_classes', 1) == 1
@@ -129,8 +130,9 @@ def predict_from_json(data):
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
 
 
-        # Always use baseline-1 model
-        key     = -1
+        key = utils.select_baseline_key(baseline)
+        if key not in BASELINE_MODELS:
+            key = -1
         config  = BASELINE_CONFIGS.get(key)
         mdl     = BASELINE_MODELS.get(key)
         pop_avg = BASELINE_POP_AVGS.get(key)
@@ -138,7 +140,7 @@ def predict_from_json(data):
         if config is None or mdl is None:
             return {"error": f"Model for baseline key {key} is not loaded."}, 500
 
-        logger.info(f"Preprocessing data (baseline={baseline}, always using model key={key})...")
+        logger.info(f"Preprocessing data (baseline={baseline}, model key={key})...")
 
         if IS_REGRESSION:
             # Step 1: independent inference for each measure
