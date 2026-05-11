@@ -30,15 +30,29 @@ import utils
 
 # ── CLI args ──────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
-parser.add_argument('--config',  default='baseline-1_configuration.yaml')
-parser.add_argument('--model',   default='baseline-1_regression_model.pt')
-parser.add_argument('--pop_avg', default='baseline-1_average.npy')
+parser.add_argument('--baseline', type=float, default=70,
+                    help='Patient baseline glucose. Selects model: <100 → baseline80, ≥100 → baseline-1')
+parser.add_argument('--config',  default=None, help='Override config path')
+parser.add_argument('--model',   default=None, help='Override model path')
+parser.add_argument('--pop_avg', default=None, help='Override population average path')
 parser.add_argument('--pkl',     default=None,
                     help='Path to records pkl. Defaults to config[data][file], '
                          'then ../research/allRecords6.pkl as fallback.')
 parser.add_argument('--n',       type=int, default=1000)
 parser.add_argument('--seed',    type=int, default=42)
 args = parser.parse_args()
+
+key = utils.select_baseline_key(args.baseline)
+if key == 80:
+    args.config  = args.config  or 'baseline80_configuration.yaml'
+    args.model   = args.model   or 'baseline80_regression_model.pt'
+    args.pop_avg = args.pop_avg or 'baseline80_population_average.npy'
+else:
+    key          = -1
+    args.config  = args.config  or 'baseline-1_configuration.yaml'
+    args.model   = args.model   or 'baseline-1_regression_model.pt'
+    args.pop_avg = args.pop_avg or 'baseline-1_average.npy'
+print(f"Using baseline{key} model (baseline={args.baseline})")
 
 random.seed(args.seed)
 np.random.seed(args.seed)

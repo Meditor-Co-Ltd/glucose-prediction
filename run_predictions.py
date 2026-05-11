@@ -72,20 +72,29 @@ def main():
         run_clarke(args.pkl, baseline=args.baseline, no_plot=args.no_plot, output=args.output)
         return
 
-    key         = -1
-    config_file = 'baseline-1_configuration.yaml'
-    model_file  = 'baseline-1_regression_model.pt'
+    key = utils.select_baseline_key(args.baseline)
+    if key == 80:
+        config_file   = 'baseline80_configuration.yaml'
+        model_file    = 'baseline80_regression_model.pt'
+        avg_candidates = ['baseline80_average.npy', 'baseline80_population_average.npy']
+    else:
+        key           = -1
+        config_file   = 'baseline-1_configuration.yaml'
+        model_file    = 'baseline-1_regression_model.pt'
+        avg_candidates = ['baseline-1_average.npy']
 
-    print(f'Baseline:       {args.baseline} → using baseline-1 model')
+    print(f'Baseline:       {args.baseline} → using baseline{key} model')
     print(f'Loading config: {config_file}')
     config = utils.load_config(config_file)
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
-    avg_path = 'baseline-1_average.npy'
-    pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
-    if pop_avg is not None:
-        print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
+    pop_avg = None
+    for avg_path in avg_candidates:
+        if os.path.exists(avg_path):
+            pop_avg = np.load(avg_path)
+            print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
+            break
 
     # --- Load data ---
     print(f'Loading data:   {args.file}')
@@ -451,20 +460,29 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
     """Load diabeticRecords.pkl, run inference, and draw Clarke EGA."""
     import pickle
 
-    key         = -1
-    config_file = 'baseline-1_configuration.yaml'
-    model_file  = 'baseline-1_regression_model.pt'
+    key = utils.select_baseline_key(baseline)
+    if key == 80:
+        config_file   = 'baseline80_configuration.yaml'
+        model_file    = 'baseline80_regression_model.pt'
+        avg_candidates = ['baseline80_average.npy', 'baseline80_population_average.npy']
+    else:
+        key           = -1
+        config_file   = 'baseline-1_configuration.yaml'
+        model_file    = 'baseline-1_regression_model.pt'
+        avg_candidates = ['baseline-1_average.npy']
 
-    print(f'Baseline:       {baseline} → using baseline-1 model')
+    print(f'Baseline:       {baseline} → using baseline{key} model')
     print(f'Loading config: {config_file}')
     config = utils.load_config(config_file)
     print(f'Loading model:  {model_file}')
     model = utils.load_model(model_file, config)
 
-    avg_path = 'baseline-1_average.npy'
-    pop_avg = np.load(avg_path) if os.path.exists(avg_path) else None
-    if pop_avg is not None:
-        print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
+    pop_avg = None
+    for avg_path in avg_candidates:
+        if os.path.exists(avg_path):
+            pop_avg = np.load(avg_path)
+            print(f'Population avg: {avg_path}  shape={pop_avg.shape}')
+            break
 
     print(f'Loading data:   {pkl_path}')
     with open(pkl_path, 'rb') as f:
