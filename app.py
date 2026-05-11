@@ -130,9 +130,7 @@ def predict_from_json(data):
             return {"error": "All data arrays (measure, reference, dark, cal_data) must be non-empty"}, 400
 
 
-        key = utils.select_baseline_key(baseline)
-        if key not in BASELINE_MODELS:
-            key = -1
+        key     = -1
         config  = BASELINE_CONFIGS.get(key)
         mdl     = BASELINE_MODELS.get(key)
         pop_avg = BASELINE_POP_AVGS.get(key)

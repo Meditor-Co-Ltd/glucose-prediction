@@ -72,7 +72,6 @@ def main():
         run_clarke(args.pkl, baseline=args.baseline, no_plot=args.no_plot, output=args.output)
         return
 
-    # Always use baseline-1 model
     key         = -1
     config_file = 'baseline-1_configuration.yaml'
     model_file  = 'baseline-1_regression_model.pt'
