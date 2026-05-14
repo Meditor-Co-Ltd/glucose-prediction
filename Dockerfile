@@ -27,7 +27,7 @@ COPY baseline-1_regression_model.pt .
 COPY baseline-1_average.npy .
 COPY baseline80_configuration.yaml .
 COPY baseline80_regression_model.pth .
-COPY baseline80_population_average.npy .
+COPY baseline80_average.npy .
 
 
 # Скачиваем модель при сборке контейнера (опционально)
