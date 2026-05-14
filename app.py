@@ -13,6 +13,11 @@ AVERAGE_WINDOW_MINUTES = 2
 SCALE_FACTOR_100 = 1.2   # multiplicative scale for baseline 100–124
 SCALE_FACTOR_125 = 1.4   # multiplicative scale for baseline >= 125
 
+CAL_DEFAULT_HIGH      = 150.0  # used when cal_high is unset (0) on first use
+CAL_DEFAULT_LOW       = 120.0  # used when cal_low is unset (0) on first use
+CAL_RESCALE_MIN_RANGE = 10.0   # min cal_high − cal_low required to apply linear rescaling
+CAL_ROLLING_WINDOW    = 10     # number of recent readings used to compute rolling cal_high / cal_low
+
 warnings.filterwarnings('ignore')
 
 logging.basicConfig(
@@ -98,6 +103,19 @@ def predict_from_json(data):
 
         last_glucose_values = data.get("last_glucose_values") or []
         current_time_str    = data.get("current_time", None)
+
+        try:
+            cal_high = float(data.get("cal_high") or 0)
+        except (ValueError, TypeError):
+            cal_high = 0.0
+        if cal_high == 0:
+            cal_high = CAL_DEFAULT_HIGH
+        try:
+            cal_low = float(data.get("cal_low") or 0)
+        except (ValueError, TypeError):
+            cal_low = 0.0
+        if cal_low == 0:
+            cal_low = CAL_DEFAULT_LOW
 
         time_of_day = None
         if current_time_str:
@@ -206,8 +224,62 @@ def predict_from_json(data):
                 except Exception as e:
                     logger.warning(f"Could not apply 2-min averaging: {e}")
 
+            # Step 4: update cal_high / cal_low using rolling window of last N readings
+            cap_high = 2*baseline if baseline < 100 else 2.2 * baseline
+
+            # save incoming cal values so we can invert adjusted history back to raw scale
+            prev_cal_low   = cal_low
+            prev_cal_high  = cal_high
+            prev_cal_range = prev_cal_high - prev_cal_low
+            prev_tgt_range = cap_high - baseline
+
+            def _to_raw(adj):
+                if prev_cal_range < CAL_RESCALE_MIN_RANGE:
+                    return adj  # rescaling was not applied, value is already raw
+                return prev_cal_low + (adj - baseline) * prev_cal_range / prev_tgt_range
+
+            window = [predicted_glucose]
+            if isinstance(last_glucose_values, list) and last_glucose_values:
+                sorted_history = sorted(
+                    [e for e in last_glucose_values if isinstance(e, dict) and "glucose" in e],
+                    key=lambda e: e.get("timestamp", ""),
+                    reverse=True
+                )
+                for entry in sorted_history[:CAL_ROLLING_WINDOW - 1]:
+                    try:
+                        window.append(_to_raw(float(entry["glucose"])))
+                    except (ValueError, TypeError):
+                        pass
+            cal_high = max(window)
+            cal_low  = min(window)
+
+            if cal_low < baseline:
+                cal_low = baseline
+            if cal_high > cap_high:
+                cal_high = cap_high
+
+            logger.info(f"cal_high={cal_high:.2f}, cal_low={cal_low:.2f} (cap_high={cap_high:.2f}, baseline={baseline})")
+
+            # Step 5: linear rescaling using cal_high / cal_low
+            if cal_high - cal_low >= CAL_RESCALE_MIN_RANGE:
+                cal_range    = cal_high - cal_low
+                target_range = cap_high - baseline
+                predicted_glucose = baseline + (predicted_glucose - cal_low) / cal_range * target_range
+
+                if abs(predicted_glucose - baseline) < 1e-6:
+                    noise = abs(np.random.normal(0, 1.5))
+                    predicted_glucose -= noise
+                    logger.info(f"Cal floor noise applied: -{noise:.2f}")
+                elif abs(predicted_glucose - cap_high) < 1e-6:
+                    noise = abs(np.random.normal(0, 1.5))
+                    predicted_glucose += noise
+                    logger.info(f"Cal ceiling noise applied: +{noise:.2f}")
+
+                logger.info(f"Cal rescale: [{cal_low:.1f}, {cal_high:.1f}] → [{baseline:.1f}, {cap_high:.1f}], result={predicted_glucose:.2f}")
+
             logger.info(f"Final prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}, baseline_key={key}, baseline={baseline}")
-            return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25}
+            return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25,
+                    "cal_high": round(cal_high, 2), "cal_low": round(cal_low, 2)}
 
         return {"error": "Non-regression models are not supported in this configuration."}, 500
 

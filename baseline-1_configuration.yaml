@@ -1,18 +1,18 @@
-training_date: '20260510'
+training_date: '20260514'
 version: v16
-results_path: ./RESULTS/20260510_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME
+results_path: ./RESULTS/20260514_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: true
+  use_saved_model: false
 data:
-  file: OutlierRemovedRecords6.pkl
+  file: allRecords6.pkl
   wavelength_nm_range: null
   sequence_length: 67
   use_absorption_only: false
   use_signal_std: true
   normalize_labels: false
-  use_time: true
+  use_time: false
   train_split: 0.6
   val_split: 0.3
   test_split: 0.1
@@ -20,10 +20,10 @@ data:
   diabetes_mode: -1
   population_normalize: false
   population_normalize_only: false
-  population_average_path: ./RESULTS/20260510_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME\baseline-1_population_average.npy
+  population_average_path: ./RESULTS/20260514_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_population_average.npy
 channels:
   num_base_channels: 8
-  num_total_channels: 18
+  num_total_channels: 16
   channel_names:
   - measure
   - measure_std
@@ -117,7 +117,7 @@ model:
   dropout: 0.1
   spectral_dropout: 0
   conv_kernel_size: 15
-  num_inputs: 18
+  num_inputs: 16
   sequence_length: 67
   num_classes: 1
 training:
