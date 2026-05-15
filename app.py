@@ -17,6 +17,7 @@ CAL_DEFAULT_HIGH      = 150.0  # used when cal_high is unset (0) on first use
 CAL_DEFAULT_LOW       = 120.0  # used when cal_low is unset (0) on first use
 CAL_RESCALE_MIN_RANGE = 10.0   # min cal_high − cal_low required to apply linear rescaling
 CAL_ROLLING_WINDOW    = 10     # number of recent readings used to compute rolling cal_high / cal_low
+USE_CALIBRATION       = False  # set True to apply linear rescaling to predictions
 
 warnings.filterwarnings('ignore')
 
@@ -261,7 +262,7 @@ def predict_from_json(data):
             logger.info(f"cal_high={cal_high:.2f}, cal_low={cal_low:.2f} (cap_high={cap_high:.2f}, baseline={baseline})")
 
             # Step 5: linear rescaling using cal_high / cal_low
-            if cal_high - cal_low >= CAL_RESCALE_MIN_RANGE:
+            if USE_CALIBRATION and cal_high - cal_low >= CAL_RESCALE_MIN_RANGE:
                 cal_range    = cal_high - cal_low
                 target_range = cap_high - baseline
                 predicted_glucose = baseline + (predicted_glucose - cal_low) / cal_range * target_range
