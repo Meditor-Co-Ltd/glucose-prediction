@@ -1,6 +1,6 @@
-training_date: '20260514'
+training_date: '20260516'
 version: v16
-results_path: ./RESULTS/20260514_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY
+results_path: ./RESULTS/20260516_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
@@ -20,7 +20,7 @@ data:
   diabetes_mode: -1
   population_normalize: false
   population_normalize_only: false
-  population_average_path: ./RESULTS/20260514_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_population_average.npy
+  population_average_path: ./RESULTS/20260516_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY\baseline-1_population_average.npy
 channels:
   num_base_channels: 8
   num_total_channels: 16
@@ -85,7 +85,7 @@ gradient_penalty:
   gradient_penalty: 0.0
   channel_gradient_penalty: true
   base_penalty_weight: 0.001
-  penalized_channel_weight: 0.0025
+  penalized_channel_weight: 0.005
   gradient_penalty_subsample: 32
   base_penalized_channels:
   - 2

@@ -4,7 +4,7 @@ results_path: ./RESULTS/20260515_SPECFORMER_regression_baseline80_rangeauto_auto
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: true
+  use_saved_model: false
 data:
   file: allRecords6.pkl
   wavelength_nm_range: null
@@ -85,7 +85,7 @@ gradient_penalty:
   gradient_penalty: 0.0
   channel_gradient_penalty: true
   base_penalty_weight: 0.001
-  penalized_channel_weight: 0.0025
+  penalized_channel_weight: 0.003
   gradient_penalty_subsample: 32
   base_penalized_channels:
   - 2
