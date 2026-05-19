@@ -227,6 +227,19 @@ def add_spectral_derivatives(x_np, derivative_order=1):
     return x_np
 
 
+def add_sg_derivatives(x_np, derivative_order, window_length, poly_order):
+    """
+    Append Savitzky-Golay derivative channels along axis=1.
+    Used when normalization.sg_window_length is set in config.
+    """
+    from scipy.signal import savgol_filter
+    for d in range(1, derivative_order + 1):
+        deriv = savgol_filter(x_np, window_length=window_length,
+                              polyorder=poly_order, deriv=d, axis=2)
+        x_np = np.concatenate([x_np, deriv], axis=1)
+    return x_np
+
+
 def apply_per_channel_snv(x_tensor):
     """
     Apply per-channel SNV normalization and concatenate with the original.
@@ -261,15 +274,21 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg
     Returns:
         torch.Tensor [1, num_inputs, seq_len] ready for model inference
     """
-    wl_range              = config.get('data', {}).get('wavelength_nm_range', [450, 650])
-    use_absorption        = config.get('data', {}).get('use_absorption', True)
-    use_signal_std        = config.get('data', {}).get('use_signal_std', True)
+    wl_range               = config.get('data', {}).get('wavelength_nm_range', [450, 650])
+    use_absorption         = config.get('data', {}).get('use_absorption', True)
+    use_signal_std         = config.get('data', {}).get('use_signal_std', True)
+    exclude_dark_reference = config.get('data', {}).get('exclude_dark_reference', False)
     population_normalize      = config.get('data', {}).get('population_normalize', False)
     population_normalize_only = config.get('data', {}).get('population_normalize_only', False)
-    use_time              = config.get('data', {}).get('use_time', False)
-    add_deriv             = config.get('spectral', {}).get('add_spectral_derivatives', False)
-    deriv_order           = int(config.get('spectral', {}).get('derivative_order', 1))
-    per_channel_norm      = config.get('normalization', {}).get('per_channel_norm', False)
+    use_time               = config.get('data', {}).get('use_time', False)
+    norm_cfg               = config.get('normalization', {})
+    add_deriv              = (config.get('spectral', {}).get('add_spectral_derivatives', False) or
+                              norm_cfg.get('use_spectral_derivatives', False))
+    sg_window              = norm_cfg.get('sg_window_length', None)
+    sg_poly                = norm_cfg.get('sg_poly_order', 3)
+    deriv_order            = int(norm_cfg.get('sg_derivative_order',
+                                 config.get('spectral', {}).get('derivative_order', 1)))
+    per_channel_norm       = norm_cfg.get('per_channel_norm', False)
 
     if wl_range is None:
         # v16 path: wavelength_binning3 (bin_size=3, 450-648nm → 67 bins)
@@ -286,11 +305,17 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg
         reference_std_b  = np.array(reference_std_l[0])
         absorption_std_b = np.array(absorption_std_l[0])
 
-        if use_signal_std:
-            x = np.stack([measure_b, measure_std_b, dark_b, dark_std_b,
-                          reference_b, reference_std_b], axis=0)
+        if exclude_dark_reference:
+            if use_signal_std:
+                x = np.stack([measure_b, measure_std_b], axis=0)
+            else:
+                x = np.stack([measure_b], axis=0)
         else:
-            x = np.stack([measure_b, dark_b, reference_b], axis=0)
+            if use_signal_std:
+                x = np.stack([measure_b, measure_std_b, dark_b, dark_std_b,
+                              reference_b, reference_std_b], axis=0)
+            else:
+                x = np.stack([measure_b, dark_b, reference_b], axis=0)
         x = np.expand_dims(x, axis=0)  # [1, C, 67]
 
         if use_absorption:
@@ -353,7 +378,10 @@ def preprocess_for_inference(measure, reference, dark, cal_data, config, pop_avg
 
     # Spectral derivatives
     if add_deriv:
-        x = add_spectral_derivatives(x, deriv_order)
+        if sg_window is not None:
+            x = add_sg_derivatives(x, deriv_order, sg_window, sg_poly)
+        else:
+            x = add_spectral_derivatives(x, deriv_order)
 
     # Population-normalize channels (pre-SNV, same as training)
     x_pop_np = None
@@ -403,19 +431,31 @@ def preprocess_binned_for_inference(feat, config, pop_avg=None, time_of_day=None
     """
     use_absorption            = config.get('data', {}).get('use_absorption', True)
     use_signal_std            = config.get('data', {}).get('use_signal_std', True)
+    exclude_dark_reference    = config.get('data', {}).get('exclude_dark_reference', False)
     population_normalize      = config.get('data', {}).get('population_normalize', False)
     population_normalize_only = config.get('data', {}).get('population_normalize_only', False)
     use_time                  = config.get('data', {}).get('use_time', False)
-    add_deriv                 = config.get('spectral', {}).get('add_spectral_derivatives', False)
-    deriv_order               = int(config.get('spectral', {}).get('derivative_order', 1))
-    per_channel_norm          = config.get('normalization', {}).get('per_channel_norm', False)
+    norm_cfg                  = config.get('normalization', {})
+    add_deriv                 = (config.get('spectral', {}).get('add_spectral_derivatives', False) or
+                                 norm_cfg.get('use_spectral_derivatives', False))
+    sg_window                 = norm_cfg.get('sg_window_length', None)
+    sg_poly                   = norm_cfg.get('sg_poly_order', 3)
+    deriv_order               = int(norm_cfg.get('sg_derivative_order',
+                                    config.get('spectral', {}).get('derivative_order', 1)))
+    per_channel_norm          = norm_cfg.get('per_channel_norm', False)
 
     feat = np.asarray(feat)  # ensure (8, 67)
 
-    if use_signal_std:
-        x = np.stack([feat[0], feat[1], feat[2], feat[3], feat[4], feat[5]], axis=0)
+    if exclude_dark_reference:
+        if use_signal_std:
+            x = np.stack([feat[0], feat[1]], axis=0)
+        else:
+            x = np.stack([feat[0]], axis=0)
     else:
-        x = np.stack([feat[0], feat[2], feat[4]], axis=0)
+        if use_signal_std:
+            x = np.stack([feat[0], feat[1], feat[2], feat[3], feat[4], feat[5]], axis=0)
+        else:
+            x = np.stack([feat[0], feat[2], feat[4]], axis=0)
     x = np.expand_dims(x, axis=0)  # [1, C, 67]
 
     if use_absorption:
@@ -424,7 +464,10 @@ def preprocess_binned_for_inference(feat, config, pop_avg=None, time_of_day=None
             x = np.concatenate([x, feat[7][np.newaxis, np.newaxis]], axis=1)
 
     if add_deriv:
-        x = add_spectral_derivatives(x, deriv_order)
+        if sg_window is not None:
+            x = add_sg_derivatives(x, deriv_order, sg_window, sg_poly)
+        else:
+            x = add_spectral_derivatives(x, deriv_order)
 
     x_pop_np = None
     if population_normalize or population_normalize_only:

@@ -1,6 +1,6 @@
-training_date: '20260518'
+training_date: '20260519'
 version: v16
-results_path: ./RESULTS/20260518_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME
+results_path: ./RESULTS/20260519_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
@@ -10,7 +10,8 @@ data:
   wavelength_nm_range: null
   sequence_length: 67
   use_absorption_only: false
-  use_signal_std: false
+  use_signal_std: true
+  exclude_dark_reference: true
   normalize_labels: false
   use_time: true
   train_split: 0.6
@@ -18,23 +19,19 @@ data:
   test_split: 0.1
   baseline: -1
   diabetes_mode: -1
-  population_normalize: true
+  population_normalize: false
   population_normalize_only: false
-  population_average_path: ./RESULTS/20260518_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME\baseline-1_population_average.npy
+  population_average_path: ./RESULTS/20260519_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME\baseline-1_population_average.npy
 channels:
-  num_base_channels: 4
-  num_total_channels: 10
+  num_base_channels: 12
+  num_total_channels: 14
   channel_names:
   - measure
-  - dark
-  - reference
+  - measure_std
   - absorption_sensor
-  penalized_channel_indices:
-  - 1
-  - 2
-  penalized_channel_names:
-  - dark
-  - reference
+  - absorption_std
+  penalized_channel_indices: []
+  penalized_channel_names: []
 outlier_removal:
   remove_absorption_outliers: true
   outlier_threshold_std: 3
@@ -43,6 +40,10 @@ normalization:
   norm_method: snv
   per_channel_norm: false
   average_norm: false
+  use_spectral_derivatives: true
+  sg_derivative_order: 2
+  sg_window_length: 11
+  sg_poly_order: 3
 augmentation:
   augment_noise: false
   use_mixup: false
@@ -63,9 +64,7 @@ gradient_penalty:
   base_penalty_weight: 0.001
   penalized_channel_weight: 0.005
   gradient_penalty_subsample: 32
-  base_penalized_channels:
-  - 1
-  - 2
+  base_penalized_channels: []
 mean_collapse:
   check_mean_collapse: true
   mean_collapse_check_epochs: 5
@@ -91,7 +90,7 @@ model:
   dropout: 0.1
   spectral_dropout: 0
   conv_kernel_size: 15
-  num_inputs: 10
+  num_inputs: 14
   sequence_length: 67
   num_classes: 1
 training:
