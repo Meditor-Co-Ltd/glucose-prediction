@@ -39,6 +39,10 @@ if __name__ != '__main__':
 # --- Multi-model setup: one model per baseline range ---
 BASELINE_KEYS = [-1, 80]
 
+MODEL_FILE_MAP = {
+    -1: 'baseline-1_model.pt',
+    80: 'baseline80_regression_model.pt',
+}
 
 logger.info("=== Starting model initialization ===")
 BASELINE_CONFIGS   = {}
@@ -49,7 +53,7 @@ for b in BASELINE_KEYS:
     try:
         cfg = utils.load_config(f'baseline{b}_configuration.yaml')
         BASELINE_CONFIGS[b] = cfg
-        BASELINE_MODELS[b]  = utils.load_model(f'baseline{b}_regression_model.pt', cfg)
+        BASELINE_MODELS[b]  = utils.load_model(MODEL_FILE_MAP.get(b, f'baseline{b}_regression_model.pt'), cfg)
         logger.info(f"baseline{b}: model loaded OK")
     except Exception as e:
         logger.error(f"baseline{b}: failed to load — {e}")
@@ -276,9 +280,13 @@ def predict_from_json(data):
 
                 logger.info(f"Cal rescale: [{cal_low:.1f}, {cal_high:.1f}] → [{baseline:.1f}, {cap_high:.1f}], result={predicted_glucose:.2f}")
 
+            tod = time_of_day if time_of_day is not None else 0.0
+            time_index = min(10, int(tod / 24.0 * 11))
+
             logger.info(f"Final prediction: glucose={predicted_glucose:.2f}, sigma={sigma_value:.4f}, baseline_key={key}, baseline={baseline}")
             return {"predicted_glucose": round(predicted_glucose, 2), "sigma": round(sigma_value, 4), "acceptance": 25,
-                    "cal_high": round(cal_high, 2), "cal_low": round(cal_low, 2)}
+                    "cal_high": round(cal_high, 2), "cal_low": round(cal_low, 2),
+                    "glycemic_index": time_index, "display_message": time_index}
 
         return {"error": "Non-regression models are not supported in this configuration."}, 500
 

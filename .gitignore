@@ -2,3 +2,5 @@
 /2026_diabetic*
 *.pkl
 *.json
+/local_data*
+plot_local_data.py

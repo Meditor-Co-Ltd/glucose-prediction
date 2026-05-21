@@ -80,8 +80,8 @@ def main():
     else:
         key           = -1
         config_file   = 'baseline-1_configuration.yaml'
-        model_file    = 'baseline-1_regression_model.pt'
-        avg_candidates = ['baseline-1_average.npy']
+        model_file    = 'baseline-1_model.pt'
+        avg_candidates = ['baseline-1_average.npy', 'baseline-1_population_average.npy']
 
     print(f'Baseline:       {args.baseline} → using baseline{key} model')
     print(f'Loading config: {config_file}')
@@ -468,8 +468,8 @@ def run_clarke(pkl_path, baseline=120, no_plot=False, output=''):
     else:
         key           = -1
         config_file   = 'baseline-1_configuration.yaml'
-        model_file    = 'baseline-1_regression_model.pt'
-        avg_candidates = ['baseline-1_average.npy']
+        model_file    = 'baseline-1_model.pt'
+        avg_candidates = ['baseline-1_average.npy', 'baseline-1_population_average.npy']
 
     print(f'Baseline:       {baseline} → using baseline{key} model')
     print(f'Loading config: {config_file}')
