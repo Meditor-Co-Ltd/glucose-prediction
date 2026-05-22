@@ -230,11 +230,13 @@ def add_spectral_derivatives(x_np, derivative_order=1):
 def add_sg_derivatives(x_np, derivative_order, window_length, poly_order):
     """
     Append Savitzky-Golay derivative channels along axis=1.
-    Used when normalization.sg_window_length is set in config.
+    Each derivative order is computed from the original input, not the accumulated result,
+    so N base channels with order=2 yields 3*N channels total.
     """
     from scipy.signal import savgol_filter
+    x_orig = x_np
     for d in range(1, derivative_order + 1):
-        deriv = savgol_filter(x_np, window_length=window_length,
+        deriv = savgol_filter(x_orig, window_length=window_length,
                               polyorder=poly_order, deriv=d, axis=2)
         x_np = np.concatenate([x_np, deriv], axis=1)
     return x_np
