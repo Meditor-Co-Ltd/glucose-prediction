@@ -90,6 +90,14 @@ def predict_from_json(data):
         if isinstance(data, list):
             data = data[0]
 
+        logger.info("=== Incoming request parameters ===")
+        for key, val in data.items():
+            if isinstance(val, list):
+                logger.info(f"  {key}: list[{len(val)}]")
+            else:
+                logger.info(f"  {key}: {val!r}")
+        logger.info("===================================")
+
         measure   = np.array(data.get("measure",   []))
         measure2  = np.array(data.get("measure2",   []))
         measure3  = np.array(data.get("measure3",   []))
