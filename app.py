@@ -117,18 +117,16 @@ def predict_from_json(data):
         last_glucose_values = data.get("last_glucose_values") or []
         current_time_str    = data.get("current_time", None)
 
-        # try:
-        #     cal_high = float(data.get("cal_high") or 0)
-        # except (ValueError, TypeError):
-        #     cal_high = 0.0
-        # if cal_high == 0:
-        #     cal_high = CAL_DEFAULT_HIGH
-        # try:
-        #     cal_low = float(data.get("cal_low") or 0)
-        # except (ValueError, TypeError):
-        #     cal_low = 0.0
-        # if cal_low == 0:
-        #     cal_low = CAL_DEFAULT_LOW
+        try:
+            cal_high = float(data.get("cal_high") or 0)
+        except (ValueError, TypeError):
+            cal_high = 0.0
+
+        try:
+            cal_low = float(data.get("cal_low") or 0)
+        except (ValueError, TypeError):
+            cal_low = 0.0
+
 
         logger.info(f"cal_high: {data.get('cal_high')!r}  →  {cal_high}")
         logger.info(f"cal_low:  {data.get('cal_low')!r}  →  {cal_low}")
