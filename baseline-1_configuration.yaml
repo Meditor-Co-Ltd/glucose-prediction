@@ -1,16 +1,16 @@
-training_date: '20260521'
+training_date: '20260523'
 version: v16
-results_path: ./RESULTS/20260521_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME
+results_path: ./RESULTS/20260523_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: false
+  use_saved_model: true
 data:
-  file: allRecords6.pkl
+  file: outlierRemovedRecords6.pkl
   wavelength_nm_range: null
   sequence_length: 67
   use_absorption_only: false
-  use_signal_std: true
+  use_signal_std: false
   exclude_dark_reference: false
   normalize_labels: false
   use_time: true
@@ -21,29 +21,21 @@ data:
   diabetes_mode: -1
   population_normalize: false
   population_normalize_only: false
-  population_average_path: ./RESULTS/20260521_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME\baseline-1_population_average.npy
+  population_average_path: ./RESULTS/20260523_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME\baseline-1_population_average.npy
 channels:
-  num_base_channels: 24
-  num_total_channels: 26
+  num_base_channels: 4
+  num_total_channels: 6
   channel_names:
   - measure
-  - measure_std
   - dark
-  - dark_std
   - reference
-  - reference_std
   - absorption_sensor
-  - absorption_std
   penalized_channel_indices:
+  - 1
   - 2
-  - 3
-  - 4
-  - 5
   penalized_channel_names:
   - dark
-  - dark_std
   - reference
-  - reference_std
 outlier_removal:
   remove_absorption_outliers: true
   outlier_threshold_std: 3
@@ -52,12 +44,14 @@ normalization:
   norm_method: none
   per_channel_norm: false
   average_norm: false
-  use_spectral_derivatives: true
+  use_spectral_derivatives: false
   sg_derivative_order: 2
   sg_window_length: 11
   sg_poly_order: 3
 augmentation:
-  augment_noise: false
+  augment_noise: true
+  augment_offset: true
+  offset_noise_pct: 0.1
   use_mixup: false
   mixup_alpha: 0.1
 weighted_sampling:
@@ -77,10 +71,8 @@ gradient_penalty:
   penalized_channel_weight: 0.015
   gradient_penalty_subsample: 32
   base_penalized_channels:
+  - 1
   - 2
-  - 3
-  - 4
-  - 5
 mean_collapse:
   check_mean_collapse: true
   mean_collapse_check_epochs: 5
@@ -106,7 +98,7 @@ model:
   dropout: 0.1
   spectral_dropout: 0
   conv_kernel_size: 15
-  num_inputs: 26
+  num_inputs: 6
   sequence_length: 67
   num_classes: 1
 training:
@@ -116,5 +108,5 @@ training:
   weight_decay: 1.0e-05
   max_grad_norm: 1.0
   batch_size: 300
-  patience: 30
+  patience: 8
   max_epochs: 10000

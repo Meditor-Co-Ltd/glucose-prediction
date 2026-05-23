@@ -40,7 +40,7 @@ if __name__ != '__main__':
 BASELINE_KEYS = [-1, 80]
 
 MODEL_FILE_MAP = {
-    -1: 'baseline-1_model.pt',
+    -1: 'baseline-1_regression_model.pt',
     80: 'baseline80_regression_model.pt',
 }
 

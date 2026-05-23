@@ -23,7 +23,7 @@ COPY app.py .
 COPY utils.py .
 COPY models.py .
 COPY baseline-1_configuration.yaml .
-COPY baseline-1_model.pt .
+COPY baseline-1_regression_model.pt .
 COPY baseline-1_population_average.npy .
 COPY baseline80_configuration.yaml .
 COPY baseline80_regression_model.pt .
