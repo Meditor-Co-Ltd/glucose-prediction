@@ -130,6 +130,9 @@ def predict_from_json(data):
         if cal_low == 0:
             cal_low = CAL_DEFAULT_LOW
 
+        logger.info(f"cal_high (raw={data.get('cal_high')!r} → parsed={cal_high}), "
+                    f"cal_low (raw={data.get('cal_low')!r} → parsed={cal_low})")
+
         time_of_day = None
         if current_time_str:
             try:
