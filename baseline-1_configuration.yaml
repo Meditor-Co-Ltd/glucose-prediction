@@ -1,12 +1,12 @@
-training_date: '20260523'
+training_date: '20260528'
 version: v16
-results_path: ./RESULTS/20260523_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME
+results_path: ./RESULTS/20260528_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME
 checkpoint_path: ./regression_tensorboard\checkpoints\best_regression_model.pth
 inference:
   inference_only: false
-  use_saved_model: true
+  use_saved_model: false
 data:
-  file: outlierRemovedRecords6.pkl
+  file: allRecords6.pkl
   wavelength_nm_range: null
   sequence_length: 67
   use_absorption_only: false
@@ -21,7 +21,7 @@ data:
   diabetes_mode: -1
   population_normalize: false
   population_normalize_only: false
-  population_average_path: ./RESULTS/20260523_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME\baseline-1_population_average.npy
+  population_average_path: ./RESULTS/20260528_SPECFORMER_regression_baseline-1_rangeauto_auto_FULL_CHANNELS_CHANNEL_PENALTY_TIME\baseline-1_population_average.npy
 channels:
   num_base_channels: 4
   num_total_channels: 6
@@ -68,7 +68,7 @@ gradient_penalty:
   gradient_penalty: 0.0
   channel_gradient_penalty: true
   base_penalty_weight: 0.001
-  penalized_channel_weight: 0.015
+  penalized_channel_weight: 0.005
   gradient_penalty_subsample: 32
   base_penalized_channels:
   - 1
